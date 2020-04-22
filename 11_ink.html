@@ -25,10 +25,10 @@
 	<div class="collapse" id="div2">
 
 		<div><img id="hanco"></div>
-		<div><button type="button" id="faucet" class="btn btn-primary">インク充填</button></div>
+		<div><button type="button" id="faucet" class="btn btn-primary">インク充填</button>　<label id="amount">0 XYM</label></div>
 
 	</div>
-	
+
 	</div>
 <script
     src="https://code.jquery.com/jquery-3.3.1.slim.min.js"
@@ -48,15 +48,82 @@
 
 const qr = require("/node_modules/symbol-qr-library");
 const nem = require("/node_modules/symbol-sdk");
-var aliceAddress;
+const op = require("/node_modules/rxjs/operators");
+
+const NODE = 'https://sym-test.opening-line.jp:3001';
+const accountHttp = new nem.AccountHttp(NODE);
+
+const wsEndpoint = NODE.replace('https', 'wss');
+const listener = new nem.Listener(wsEndpoint, WebSocket);
+listener.open().then(() => {
+    setInterval(function(){listener.newBlock()}, 30000);
+});
+
+
+var alicePublicAccount;
+var exportAccount;
+
+function dispAmount(amount,divisibility){
+
+	var strNum = amount.toString();
+	if(divisibility > 0){
+
+		if(amount < Math.pow(10, divisibility)){
+
+			return "0." + paddingAmount0(ats,0,divisibility);
+
+		}else{
+
+			var r = strNum.slice(-divisibility);
+			var l = strNum.substring(0,strNum.length - divisibility);
+			return comma3(l) + "." + r;
+		}
+
+	}else{
+
+		return comma3(strNum);
+	}
+
+}
+function comma3(strNum){
+	return strNum.replace( /(\d)(?=(\d\d\d)+(?!\d))/g, '$1,');
+}
+
+function paddingAmount0(val,char,n){
+	for(; val.length < n; val= char + val);
+	return val;
+}
 
 $('#div1').collapse('show');
 
 $("#create").click(
 	function(){
 		const alice = nem.Account.generateNewAccount(nem.NetworkType.TEST_NET);
-		aliceAddress = alice.publicAccount.address;
-		const exportAccount = new qr.AccountQR(alice,$("#pass").val(), nem.NetworkType.TEST_NET);
+		alicePublicAccount = alice.publicAccount;
+		exportAccount = new qr.AccountQR(alice,$("#pass").val(), nem.NetworkType.TEST_NET);
+		delete alice;
+
+		listener
+		.confirmed(alicePublicAccount.address)
+		.pipe(
+			op.delay(1000),
+			op.mergeMap(x=>{
+				console.log(x);
+				return accountHttp.getAccountInfo(alicePublicAccount.address);
+			}),
+			op.mergeMap(_=>{
+				console.log(_)
+				return _.mosaics
+			}),
+			op.filter(_ => _.id.toHex() === '747B276C30626442')
+		)
+		.subscribe(
+			function(_){
+				console.log(_);
+				$("#amount").text(dispAmount(_.amount.toString(),6) + " XYM");
+			},
+			err => console.error(err)
+		);
 
 		const base64 = exportAccount.toBase64()
 		.subscribe(x=>{
@@ -70,7 +137,7 @@ $("#create").click(
 $("#faucet").click(
     function(){
         window.open(
-        "http://faucet-01.symboldev.network/?recipient=" + aliceAddress.plain() + "&amount=1",
+        "http://faucet-01.symboldev.network/?recipient=" + alicePublicAccount.address.plain() + "&amount=1",
         "_blank"
 	    );
         return false;
