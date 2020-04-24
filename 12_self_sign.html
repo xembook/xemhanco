@@ -46,12 +46,16 @@
 			<div class="input-group">
 	  		    <label class="input-group-btn">
 	  		        <span class="btn btn-primary">
-	  		            ファイルハッシュ挿入<input id="file" type="file" style="display:none">
+	  		            ファイル指紋挿入<input id="file" type="file" style="display:none">
 	  		        </span>
 	  		    </label>
-	  		    <input type="text" class="form-control" readonly="">
+	  		    
 	  		</div>
 	  		<div><button type="button" id="self_signature" class="btn btn-primary">押印</button></div>
+			<div class="collapse" id="div4">
+	            <div id="selfsign_confirmed"><ul></ul></div>
+
+			</div>
 
 	      </div>
 
@@ -61,6 +65,8 @@
 	</div>
 
 </div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/3.1.9-1/crypto-js.min.js"></script>
+
 <script
     src="https://code.jquery.com/jquery-3.3.1.slim.min.js"
     integrity="sha384-q8i/X+965DzO0rT7abK41JStQIAqVgRVzpbzo5smXKp4YfRvH+8abtTE1Pi6jizo"
@@ -84,6 +90,8 @@ const Buffer = require("/node_modules/buffer").Buffer;
 const sha3_256 = require("/node_modules/js-sha3").sha3_256;
 
 const NODE = 'https://sym-test.opening-line.jp:3001';
+const GENERATION_HASH = "44D2225B8932C9A96DCB13508CBCDFFA9A9663BFBA2354FEEC8FCFCB7E19846C";
+
 const accountHttp = new nem.AccountHttp(NODE);
 
 const wsEndpoint = NODE.replace('https', 'wss');
@@ -98,11 +106,12 @@ var exportAccount;
 function dispAmount(amount,divisibility){
 
 	var strNum = amount.toString();
+
 	if(divisibility > 0){
 
 		if(amount < Math.pow(10, divisibility)){
 
-			return "0." + paddingAmount0(ats,0,divisibility);
+			return "0." + paddingAmount0(strNum,0,divisibility);
 
 		}else{
 
@@ -167,14 +176,55 @@ function loadImage(fileID) {
 	reader.readAsDataURL(file, "utf-8");
 	reader.onload = (function(theFile) {
 		return function(e) {
-			var buf = new Buffer(e.target.result)
-			result = sha3_256.create().update(buf).hex();
-			$("#text_sign").val(result);
+			const raw = CryptoJS.enc.Base64.parse(e.target.result.split(/,(.+)?/)[1]);
+			const sign = CryptoJS.SHA256(raw);
+			$("#text_sign").val(sign);
 		};
 	})(file);
 }
 
-$('#self_signature').change(function(e) {
+$('#self_signature').click(function(e) {
+
+	// 入力ダイアログを表示 ＋ 入力内容を user に代入
+	const pass = window.prompt("パスフレーズを入力してください", "");
+	const importAccount = qr.AccountQR.fromJSON(exportAccount.toJSON(),pass);
+
+	const tx = nem.TransferTransaction.create(
+		nem.Deadline.create(),
+		importAccount.account.address,
+		[],
+		nem.PlainMessage.create($("#text_sign").val()),
+		nem.NetworkType.TEST_NET,
+		nem.UInt64.fromUint(100000)
+
+	);
+
+    const signedTx = importAccount.account.sign(tx,GENERATION_HASH);
+    delete importAccount;
+    const txHttp = new nem.TransactionHttp(NODE);
+    txHttp
+    .announce(signedTx)
+    .subscribe(_ => {
+    	console.log(_);
+
+		let confirmListener = listener
+		.confirmed(alicePublicAccount.address)
+		.pipe(
+            op.filter((tx) => tx.transactionInfo !== undefined && tx.transactionInfo.hash === signedTx.hash),
+		)
+		.subscribe(
+			function(_){
+			    $('#selfsign_confirmed ul').append('<li><a target="_blank" href="http://explorer.symboldev.network/transaction/' + signedTx.hash + '">エクスプローラーで確認</a></li>');
+				$('#div4').collapse('show');
+				confirmListener.close();
+			},
+			err => console.error(err)
+		);
+
+    }, err => console.error(err));
+
+		console.log("https://sym-test.opening-line.jp:3001/transaction/" + signedTx.hash +  "/status")
+
 
 
 });
