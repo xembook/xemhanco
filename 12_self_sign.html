@@ -103,6 +103,9 @@ listener.open().then(() => {
 var alicePublicAccount;
 var exportAccount;
 
+var bob = nem.Account.generateNewAccount(nem.NetworkType.MIJIN_TEST);
+var privateKey = bob.privateKey;
+
 function dispAmount(amount,divisibility){
 
 	var strNum = amount.toString();
