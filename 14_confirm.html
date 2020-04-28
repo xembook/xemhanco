@@ -14,15 +14,12 @@
 
 	<h1>XEMHanco</h1>
 	<div class="collapse" id="div1">
-
 		<label for="text1">パスフレーズ:</label>
 		<input type="text" id="pass" class="form-control">
-
 		<button type="button" id="create" class="btn btn-primary">作成</button>
 	</div>
 
 	<div class="collapse" id="div2">
-
 		<div><img id="hanco"></div>
 		<div><button type="button" id="faucet" class="btn btn-primary">インク充填</button>　<label id="amount">0 XYM</label></div>
 	</div>
@@ -36,7 +33,6 @@
 			<li class="nav-item">
 				<a href="#tab_selfsign" class="nav-link" data-toggle="tab">自署</a>
 			</li>
-
 			<li class="nav-item">
 				<a href="#photo3" class="nav-link" data-toggle="tab">承認</a>
 			</li>
@@ -80,7 +76,7 @@
 			<div id="photo3" class="tab-pane">
 
 				<label for="text1">申請者QRスキャン:</label>
-				
+
 				<div class="input-group">
 					<label class="input-group-btn">
 						<span class="btn btn-primary">
@@ -89,15 +85,15 @@
 					</label>
 
 				</div>
-				
+
 				<div id="loadingMessage">🎥 Unable to access video stream (please make sure you have a webcam enabled)</div>
 				<canvas id="canvas" hidden></canvas>
 				<div id="output" hidden>
 					<div id="outputMessage">No QR code detected.</div>
 					<div hidden><b>Data:</b> <span id="outputData"></span></div>
 				</div>
-				
-	
+
+
 				<label for="text1">承認テキスト:</label>
 				<input type="text" id="confirm_text" class="form-control">
 				<div class="input-group">
@@ -144,8 +140,8 @@
 const qr = require("/node_modules/symbol-qr-library");
 const nem = require("/node_modules/symbol-sdk");
 const op = require("/node_modules/rxjs/operators");
-const Buffer = require("/node_modules/buffer").Buffer;
-const sha3_256 = require("/node_modules/js-sha3").sha3_256;
+//const Buffer = require("/node_modules/buffer").Buffer;
+//const sha3_256 = require("/node_modules/js-sha3").sha3_256;
 
 const NODE = 'https://sym-test.opening-line.jp:3001';
 const GENERATION_HASH = "44D2225B8932C9A96DCB13508CBCDFFA9A9663BFBA2354FEEC8FCFCB7E19846C";
@@ -158,13 +154,12 @@ listener.open().then(() => {
 	setInterval(function(){listener.newBlock()}, 30000);
 });
 
-isConfirmedByImage = false;
+var isConfirmedByImage = false;
 var alicePublicAccount;
 var exportAccount;
 
 var bob = nem.Account.generateNewAccount(nem.NetworkType.MIJIN_TEST);
 var privateKey = bob.privateKey;
-
 
 var video = document.createElement("video");
 var canvasElement = document.getElementById("canvas");
@@ -174,7 +169,6 @@ var outputContainer = document.getElementById("output");
 var outputMessage = document.getElementById("outputMessage");
 var outputData = document.getElementById("outputData");
 
-
 function drawLine(begin, end, color) {
 	canvas.beginPath();
 	canvas.moveTo(begin.x, begin.y);
@@ -183,8 +177,6 @@ function drawLine(begin, end, color) {
 	canvas.strokeStyle = color;
 	canvas.stroke();
 }
-
-
 
 function tick() {
 	if(isConfirmedByImage){
@@ -202,9 +194,7 @@ function tick() {
 		getCodeInfo(video);
 	}
 	requestAnimationFrame(tick);
-
 }
-
 
 function getCodeInfo(src){
 
@@ -224,9 +214,6 @@ function getCodeInfo(src){
 		outputData.parentElement.hidden = false;
 		outputData.innerText = code.data;
 
-
-
-
 	} else {
 		outputMessage.hidden = false;
 		outputData.parentElement.hidden = true;
@@ -239,7 +226,7 @@ $(".nav-item a").click( function(e){
 
 	console.log(this.href.indexOf("photo3"));
 	if(this.href.indexOf("photo3") > 0){
-			
+
 		isConfirmedByImage = false;
 
 		// Use facingMode: environment to attemt to get the front camera on phones
@@ -251,23 +238,18 @@ $(".nav-item a").click( function(e){
 			requestAnimationFrame(tick);
 		});
 	}else{
-			
+
 		if(window.localStream != undefined){
 			window.localStream.getTracks().forEach( (track) => {
 				track.stop();
 			});
 		}
-	
 	}
 } );
-
-
-
 
 function dispAmount(amount,divisibility){
 
 	var strNum = amount.toString();
-
 	if(divisibility > 0){
 
 		if(amount < Math.pow(10, divisibility)){
@@ -327,7 +309,6 @@ $("#create").click(
 			$('#hanco').attr('src',x);
 		});
 
-
 		const contactQR = new qr.ContactQR("XEMHanco.1",alicePublicAccount);
 		contactQR.toBase64()
 		.subscribe(x=>{
@@ -359,7 +340,6 @@ $('#download_contact').click(function(e){
 		this.href = x;
 	});
 });
-
 
 $('#self_signature').click(function(e) {
 
@@ -403,14 +383,12 @@ $('#self_signature').click(function(e) {
 		console.log("https://sym-test.opening-line.jp:3001/transaction/" + signedTx.hash +	"/status")
 });
 
-
 $('#confirm_scan_image').change(function(e) {
 
 	isConfirmedByImage = true;
 	window.localStream.getTracks().forEach( (track) => {
 		track.stop();
 	});
-	
 
 	loadingMessage.hidden	= true;
 	canvasElement.hidden	 = false;
@@ -429,7 +407,6 @@ $('#confirm_scan_image').change(function(e) {
 				img.src = data;
 				img.onload = function() {
 
-
 					canvasElement.height = img.width;
 					canvasElement.width	= img.height;
 					getCodeInfo(img);
@@ -439,8 +416,6 @@ $('#confirm_scan_image').change(function(e) {
 	} else {
 		alert('JPEGかPNGファイルをアップして下さい');
 	}
-
-		
 });
 
 $('#file').change(function(e) {
@@ -458,6 +433,5 @@ $("#faucet").click(
 );
 
 })</script>
-
 </body>
 </html>
