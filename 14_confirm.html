@@ -14,7 +14,7 @@
 
 	<h1>XEMHanco</h1>
 	<div class="collapse" id="div1">
-		<label for="text1">パスフレーズ:</label>
+		<label>パスフレーズ:</label>
 		<input type="text" id="pass" class="form-control">
 		<button type="button" id="create" class="btn btn-primary">作成</button>
 	</div>
@@ -34,7 +34,7 @@
 				<a href="#tab_selfsign" class="nav-link" data-toggle="tab">自署</a>
 			</li>
 			<li class="nav-item">
-				<a href="#photo3" class="nav-link" data-toggle="tab">承認</a>
+				<a href="#tab_confirm" class="nav-link" data-toggle="tab">承認</a>
 			</li>
 			<li class="nav-item">
 				<a href="#photo4" class="nav-link" data-toggle="tab">タブ4</a>
@@ -44,25 +44,23 @@
 		<div class="tab-content">
 			<div id="tab_selfsign" class="tab-pane">
 
-				<label for="text1">署名テキスト:</label>
-				<input type="text" id="text_sign" class="form-control">
+				<label>署名テキスト:</label>
+				<input type="text" id="text_selfsign" class="form-control">
 				<div class="input-group">
 					<label class="input-group-btn">
 						<span class="btn btn-primary">
-							ファイル指紋挿入<input id="file" type="file" style="display:none">
+							ファイル指紋挿入<input id="file_selfsign" type="file" style="display:none">
 						</span>
 					</label>
 
 				</div>
-				<div><button type="button" id="self_signature" class="btn btn-primary">押印</button></div>
+				<div><button type="button" id="button_selfsign" class="btn btn-primary">押印</button></div>
 				<div class="collapse" id="div4">
-					<div id="selfsign_confirmed"><ul></ul></div>
+					<div id="confirmed_selfsign"><ul></ul></div>
 				</div>
 			</div>
 
 			<div id="tab_contact" class="tab-pane active">
-
-
 				<div class="card" style="width: 18rem;">
 					<img class="card-img-top" id="contact" alt="カードの画像">
 					<div class="card-body">
@@ -73,38 +71,34 @@
 				</div>
 
 			</div>
-			<div id="photo3" class="tab-pane">
+			<div id="tab_confirm" class="tab-pane">
 
-				<label for="text1">申請者QRスキャン:</label>
+				<label>申請者QRスキャン:</label>
 
 				<div class="input-group">
 					<label class="input-group-btn">
 						<span class="btn btn-primary">
-							画像でスキャン<input id="confirm_scan_image" type="file" style="display:none">
+							画像でスキャン<input id="confirm_image" type="file" style="display:none">
 						</span>
 					</label>
-
 				</div>
 
-				<div id="loadingMessage">🎥 Unable to access video stream (please make sure you have a webcam enabled)</div>
 				<canvas id="canvas" hidden></canvas>
 				<div id="output" hidden>
-					<div id="outputMessage">No QR code detected.</div>
 					<div hidden><b>Data:</b> <span id="outputData"></span></div>
 				</div>
 
-
-				<label for="text1">承認テキスト:</label>
-				<input type="text" id="confirm_text" class="form-control">
+				<label>承認テキスト:</label>
+				<input type="text" id="text_confirm" class="form-control">
 				<div class="input-group">
 					<label class="input-group-btn">
 						<span class="btn btn-primary">
-							申請書ファイルの指紋挿入<input id="file" type="file" style="display:none">
+							申請書ファイルの指紋挿入<input id="file_confirm" type="file" style="display:none">
 						</span>
 					</label>
 				</div>
-				<div><button type="button" id="confirm_sign" class="btn btn-primary">押印</button></div>
-				<div class="collapse" id="div4">
+				<div><button type="button" id="button_confirm" class="btn btn-primary">押印</button></div>
+				<div class="collapse" id="div5">
 					<div id="confirm_confirmed"><ul></ul></div>
 				</div>
 
@@ -154,7 +148,7 @@ listener.open().then(() => {
 	setInterval(function(){listener.newBlock()}, 30000);
 });
 
-var isConfirmedByImage = false;
+var isConfirmContactImageLocked = false;
 var alicePublicAccount;
 var exportAccount;
 
@@ -164,9 +158,7 @@ var privateKey = bob.privateKey;
 var video = document.createElement("video");
 var canvasElement = document.getElementById("canvas");
 var canvas = canvasElement.getContext("2d");
-var loadingMessage = document.getElementById("loadingMessage");
 var outputContainer = document.getElementById("output");
-var outputMessage = document.getElementById("outputMessage");
 var outputData = document.getElementById("outputData");
 
 function drawLine(begin, end, color) {
@@ -179,13 +171,11 @@ function drawLine(begin, end, color) {
 }
 
 function tick() {
-	if(isConfirmedByImage){
+	if(isConfirmContactImageLocked){
 		return;
 	}
 
-	loadingMessage.innerText = "⌛ Loading video..."
 	if (video.readyState === video.HAVE_ENOUGH_DATA) {
-		loadingMessage.hidden	= true;
 		canvasElement.hidden	 = false;
 		outputContainer.hidden = false;
 
@@ -205,17 +195,16 @@ function getCodeInfo(src){
 	});
 
 	if (code) {
+		isConfirmContactImageLocked = true;
 		drawLine(code.location.topLeftCorner		, code.location.topRightCorner		,"#FF3B58");
 		drawLine(code.location.topRightCorner		, code.location.bottomRightCorner	,"#FF3B58");
 		drawLine(code.location.bottomRightCorner	, code.location.bottomLeftCorner	,"#FF3B58");
 		drawLine(code.location.bottomLeftCorner		, code.location.topLeftCorner		,"#FF3B58");
 
-		outputMessage.hidden = true;
 		outputData.parentElement.hidden = false;
 		outputData.innerText = code.data;
 
 	} else {
-		outputMessage.hidden = false;
 		outputData.parentElement.hidden = true;
 	}
 }
@@ -224,10 +213,9 @@ function getCodeInfo(src){
 $(".nav-item a").click( function(e){
 
 
-	console.log(this.href.indexOf("photo3"));
-	if(this.href.indexOf("photo3") > 0){
+	if(this.href.indexOf("tab_confirm") > 0){
 
-		isConfirmedByImage = false;
+		isConfirmContactImageLocked = false;
 
 		// Use facingMode: environment to attemt to get the front camera on phones
 		navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } }).then(function(stream) {
@@ -285,6 +273,12 @@ $("#create").click(
 		alicePublicAccount = alice.publicAccount;
 		exportAccount = new qr.AccountQR(alice,$("#pass").val(), nem.NetworkType.TEST_NET);
 		delete alice;
+		exportAccount.toBase64()
+		.subscribe(x=>{
+			$('#div1').collapse('hide');
+			$('#div2').collapse('show');
+			$('#hanco').attr('src',x);
+		});
 
 		listener
 		.confirmed(alicePublicAccount.address)
@@ -301,13 +295,6 @@ $("#create").click(
 			},
 			err => console.error(err)
 		);
-
-		const base64 = exportAccount.toBase64()
-		.subscribe(x=>{
-			$('#div1').collapse('hide');
-			$('#div2').collapse('show');
-			$('#hanco').attr('src',x);
-		});
 
 		const contactQR = new qr.ContactQR("XEMHanco.1",alicePublicAccount);
 		contactQR.toBase64()
@@ -328,7 +315,7 @@ function loadImage(fileID) {
 		return function(e) {
 			const raw = CryptoJS.enc.Base64.parse(e.target.result.split(/,(.+)?/)[1]);
 			const sign = CryptoJS.SHA256(raw);
-			$("#text_sign").val(sign);
+			$("#text_selfsign").val(sign);
 		};
 	})(file);
 }
@@ -341,7 +328,7 @@ $('#download_contact').click(function(e){
 	});
 });
 
-$('#self_signature').click(function(e) {
+$('#button_selfsign').click(function(e) {
 
 	// 入力ダイアログを表示 ＋ 入力内容を user に代入
 	const pass = window.prompt("パスフレーズを入力してください", "");
@@ -351,7 +338,7 @@ $('#self_signature').click(function(e) {
 		nem.Deadline.create(),
 		importAccount.account.address,
 		[],
-		nem.PlainMessage.create($("#text_sign").val()),
+		nem.PlainMessage.create($("#text_selfsign").val()),
 		nem.NetworkType.TEST_NET,
 		nem.UInt64.fromUint(100000)
 	);
@@ -371,9 +358,8 @@ $('#self_signature').click(function(e) {
 		)
 		.subscribe(
 			function(_){
-				$('#selfsign_confirmed ul').append('<li><a target="_blank" href="http://explorer.symboldev.network/transaction/' + signedTx.hash + '">エクスプローラーで確認</a></li>');
+				$('#confirmed_selfsign ul').append('<li><a target="_blank" href="http://explorer.symboldev.network/transaction/' + signedTx.hash + '">エクスプローラーで確認</a></li>');
 				$('#div4').collapse('show');
-				confirmListener.close();
 			},
 			err => console.error(err)
 		);
@@ -383,18 +369,63 @@ $('#self_signature').click(function(e) {
 		console.log("https://sym-test.opening-line.jp:3001/transaction/" + signedTx.hash +	"/status")
 });
 
-$('#confirm_scan_image').change(function(e) {
 
-	isConfirmedByImage = true;
+$('#button_confirm').click(function(e) {
+
+	// 入力ダイアログを表示 ＋ 入力内容を user に代入
+	const pass = window.prompt("パスフレーズを入力してください", "");
+	const importAccount = qr.AccountQR.fromJSON(exportAccount.toJSON(),pass);
+
+	const confirmedAccount = nem.PublicAccount.createFromPublicKey(JSON.parse(outputData.innerText).data.publicKey,nem.NetworkType.TEST_NET);
+
+	const tx = nem.TransferTransaction.create(
+		nem.Deadline.create(),
+		confirmedAccount.address,
+		[],
+		nem.PlainMessage.create($("#text_confirm").val()),
+		nem.NetworkType.TEST_NET,
+		nem.UInt64.fromUint(100000)
+	);
+
+	const signedTx = importAccount.account.sign(tx,GENERATION_HASH);
+	delete importAccount;
+	const txHttp = new nem.TransactionHttp(NODE);
+	txHttp
+	.announce(signedTx)
+	.subscribe(_ => {
+		console.log(_);
+
+		let confirmListener = listener
+		.confirmed(alicePublicAccount.address)
+		.pipe(
+			op.filter((tx) => tx.transactionInfo !== undefined && tx.transactionInfo.hash === signedTx.hash),
+		)
+		.subscribe(
+			function(_){
+				$('#confirm_confirmed ul').append('<li><a target="_blank" href="http://explorer.symboldev.network/transaction/' + signedTx.hash + '">エクスプローラーで確認</a></li>');
+				$('#div5').collapse('show');
+			},
+			err => console.error(err)
+		);
+
+	}, err => console.error(err));
+
+		console.log("https://sym-test.opening-line.jp:3001/transaction/" + signedTx.hash +	"/status")
+});
+
+
+
+$('#confirm_image').change(function(e) {
+
+	isConfirmContactImageLocked = true;
 	window.localStream.getTracks().forEach( (track) => {
 		track.stop();
 	});
 
-	loadingMessage.hidden	= true;
 	canvasElement.hidden	 = false;
 	outputContainer.hidden = false;
 
-	var fileList = document.getElementById("confirm_scan_image").files;
+	var fileList = document.getElementById("confirm_image").files;
 	var reader = new FileReader();
 	file = fileList[0];
 	if (file.type == 'image/jpeg' || file.type == 'image/png'){
@@ -418,8 +449,8 @@ $('#confirm_scan_image').change(function(e) {
 	}
 });
 
-$('#file').change(function(e) {
-	loadImage('file');
+$('#file_selfsign').change(function(e) {
+	loadImage('file_selfsign');
 });
 
 $("#faucet").click(
