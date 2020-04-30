@@ -64,7 +64,7 @@
 				<div class="card" style="width: 18rem;">
 					<img class="card-img-top" id="contact" alt="カードの画像">
 					<div class="card-body">
-						<h5 class="card-title">口座番号</h5>
+						<h5 class="card-title">口座ID</h5>
 						<p class="card-text" id="text_contact"></p>
 						<a id="download_contact" href="javascript:void(0);" download="contact_qr.png" class="btn btn-primary">ダウンロード</a>
 					</div>
@@ -85,7 +85,7 @@
 
 				<canvas id="canvas" hidden></canvas>
 				<div id="output" hidden>
-					<div hidden><b>Data:</b> <span id="outputData"></span></div>
+					<div hidden><b>申請者口座ID:</b> <span id="outputData"></span></div>
 				</div>
 
 				<label>承認テキスト:</label>
@@ -202,7 +202,7 @@ function getCodeInfo(src){
 		drawLine(code.location.bottomLeftCorner		, code.location.topLeftCorner		,"#FF3B58");
 
 		outputData.parentElement.hidden = false;
-		outputData.innerText = code.data;
+		outputData.innerText = JSON.parse(code.data).data.publicKey;
 
 	} else {
 		outputData.parentElement.hidden = true;
@@ -376,7 +376,7 @@ $('#button_confirm').click(function(e) {
 	const pass = window.prompt("パスフレーズを入力してください", "");
 	const importAccount = qr.AccountQR.fromJSON(exportAccount.toJSON(),pass);
 
-	const confirmedAccount = nem.PublicAccount.createFromPublicKey(JSON.parse(outputData.innerText).data.publicKey,nem.NetworkType.TEST_NET);
+	const confirmedAccount = nem.PublicAccount.createFromPublicKey(outputData.innerText,nem.NetworkType.TEST_NET);
 
 	const tx = nem.TransferTransaction.create(
 		nem.Deadline.create(),
@@ -389,6 +389,7 @@ $('#button_confirm').click(function(e) {
 
 	const signedTx = importAccount.account.sign(tx,GENERATION_HASH);
 	delete importAccount;
+
 	const txHttp = new nem.TransactionHttp(NODE);
 	txHttp
 	.announce(signedTx)
@@ -418,10 +419,12 @@ $('#button_confirm').click(function(e) {
 $('#confirm_image').change(function(e) {
 
 	isConfirmContactImageLocked = true;
-	window.localStream.getTracks().forEach( (track) => {
-		track.stop();
-	});
+	if(window.localStream != undefined){
 
+		window.localStream.getTracks().forEach( (track) => {
+			track.stop();
+		});
+	}
 	canvasElement.hidden	 = false;
 	outputContainer.hidden = false;
 
