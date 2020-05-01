@@ -115,7 +115,7 @@
 				</div>
 				<canvas id="canvas_verify" hidden></canvas>
 				<div id="output_verify" hidden>
-					<div hidden><b>申請者口座ID:</b> <span id="outputData_verify"></span></div>
+					<div hidden><span id="outputData_verify"></span></div>
 				</div>
 				<div id="confirmed_verify"><ul></ul></div>
 
@@ -264,7 +264,7 @@ $(".nav-item a").click( function(e){
 
 		canvasElement = document.getElementById("canvas_verify");
 		canvas = canvasElement.getContext("2d");
-		outputContainer = document.getElementById("output_verify");
+//		outputContainer = document.getElementById("output_verify");
 		outputData = document.getElementById("outputData_verify");
 
 		navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } }).then(function(stream) {
