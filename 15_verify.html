@@ -116,18 +116,15 @@
 				<canvas id="canvas_verify" hidden></canvas>
 				<div id="output_verify" hidden>
 					<div hidden><b>申請者口座ID:</b> <span id="outputData_verify"></span></div>
-				</div>				
+				</div>
 				<div id="confirmed_verify"><ul></ul></div>
 
 <!--				<div><button type="button" id="button_verify" class="btn btn-primary">監査</button></div>
 				<div id="confirmed_verify"><ul></ul></div>
 -->
-
 			</div>
 		</div>
-
 	</div>
-
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/3.1.9-1/crypto-js.min.js"></script>
@@ -227,15 +224,13 @@ function getCodeInfo(src){
 			var txHash = JSON.parse(code.data).data.hash;
 			txHttp.getTransaction(txHash)
 			.subscribe(x=>{
-			
-				outputData.innerText = x;
-				outputData.innerText = x.signer.publicKey + "\n" + x.transactionInfo.hash;
-				
+
+				$('#confirmed_verify ul')
+				.append('<li><b>口座ID:</b> <span>' + x.signer.publicKey + '</span></li>')
+				.append('<li><b>TX hash:</b> <span>' + x.transactionInfo.hash + '</span></li>')
+				.append('<li><b>署名テキスト:</b> <span>' + x.message.payload + '</span></li>')
 			});
-			
 		}
-
-
 	} else {
 		outputData.parentElement.hidden = true;
 	}
