@@ -37,11 +37,13 @@
 				<a href="#tab_confirm" class="nav-link" data-toggle="tab">承認</a>
 			</li>
 			<li class="nav-item">
-				<a href="#verify" class="nav-link" data-toggle="tab">検証</a>
+				<a href="#tab_verify" class="nav-link" data-toggle="tab">検証</a>
 			</li>
 		</ul>
 
 		<div class="tab-content">
+
+			<!-- 自署 -->
 			<div id="tab_selfsign" class="tab-pane">
 
 				<label>署名テキスト:</label>
@@ -55,11 +57,10 @@
 
 				</div>
 				<div><button type="button" id="button_selfsign" class="btn btn-primary">押印</button></div>
-				<div class="collapse" id="div4">
-					<div id="confirmed_selfsign"><ul></ul></div>
-				</div>
+				<div id="confirmed_selfsign"><ul></ul></div>
 			</div>
 
+			<!-- 口座 -->
 			<div id="tab_contact" class="tab-pane active">
 				<div class="card" style="width: 18rem;">
 					<img class="card-img-top" id="contact" alt="カードの画像">
@@ -71,14 +72,15 @@
 				</div>
 
 			</div>
+
+			<!-- 承認 -->
 			<div id="tab_confirm" class="tab-pane">
 
 				<label>申請者QRスキャン:</label>
-
 				<div class="input-group">
 					<label class="input-group-btn">
 						<span class="btn btn-primary">
-							画像でスキャン<input id="confirm_image" type="file" style="display:none">
+							画像でスキャン<input id="image_confirm" type="file" style="display:none">
 						</span>
 					</label>
 				</div>
@@ -98,21 +100,37 @@
 					</label>
 				</div>
 				<div><button type="button" id="button_confirm" class="btn btn-primary">押印</button></div>
-				<div class="collapse" id="div5">
-					<div id="confirm_confirmed"><ul></ul></div>
-				</div>
-
+				<div id="confirmed_confirm"><ul></ul></div>
 			</div>
-			<div id="verify" class="tab-pane">
-				<label>検証:</label>
+
+			<!-- 検証 -->
+			<div id="tab_verify" class="tab-pane">
+				<label>検証QRスキャン:</label>
+				<div class="input-group">
+					<label class="input-group-btn">
+						<span class="btn btn-primary">
+							画像でスキャン<input id="image_verify" type="file" style="display:none">
+						</span>
+					</label>
+				</div>
+				<canvas id="canvas_verify" hidden></canvas>
+				<div id="output_verify" hidden>
+					<div hidden><b>申請者口座ID:</b> <span id="outputData_verify"></span></div>
+				</div>				
+				<div id="confirmed_verify"><ul></ul></div>
+
+<!--				<div><button type="button" id="button_verify" class="btn btn-primary">監査</button></div>
+				<div id="confirmed_verify"><ul></ul></div>
+-->
+
 			</div>
 		</div>
 
 	</div>
 
 </div>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/3.1.9-1/crypto-js.min.js"></script>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/3.1.9-1/crypto-js.min.js"></script>
 <script
 	src="https://code.jquery.com/jquery-3.3.1.slim.min.js"
 	integrity="sha384-q8i/X+965DzO0rT7abK41JStQIAqVgRVzpbzo5smXKp4YfRvH+8abtTE1Pi6jizo"
@@ -128,19 +146,19 @@
 <script src="./jsQR.js"></script>
 <script src="symbol-qr-library-0.9.1.js"></script>
 <script src="symbol-sdk-0.18.0.js"></script>
+<script src="xembook-tools.js"></script>
 
 <script>$(function() {
 
-const qr = require("/node_modules/symbol-qr-library");
 const nem = require("/node_modules/symbol-sdk");
-const op = require("/node_modules/rxjs/operators");
-//const Buffer = require("/node_modules/buffer").Buffer;
-//const sha3_256 = require("/node_modules/js-sha3").sha3_256;
+const qr  = require("/node_modules/symbol-qr-library");
+const op  = require("/node_modules/rxjs/operators");
 
 const NODE = 'https://sym-test.opening-line.jp:3001';
 const GENERATION_HASH = "44D2225B8932C9A96DCB13508CBCDFFA9A9663BFBA2354FEEC8FCFCB7E19846C";
 
 const accountHttp = new nem.AccountHttp(NODE);
+const txHttp  = new nem.TransactionHttp(NODE);
 
 const wsEndpoint = NODE.replace('https', 'wss');
 const listener = new nem.Listener(wsEndpoint, WebSocket);
@@ -148,7 +166,7 @@ listener.open().then(() => {
 	setInterval(function(){listener.newBlock()}, 30000);
 });
 
-var isConfirmContactImageLocked = false;
+var isMovieScanning = false;
 var alicePublicAccount;
 var exportAccount;
 
@@ -161,6 +179,8 @@ var canvas = canvasElement.getContext("2d");
 var outputContainer = document.getElementById("output");
 var outputData = document.getElementById("outputData");
 
+var currentTab;
+
 function drawLine(begin, end, color) {
 	canvas.beginPath();
 	canvas.moveTo(begin.x, begin.y);
@@ -171,7 +191,7 @@ function drawLine(begin, end, color) {
 }
 
 function tick() {
-	if(isConfirmContactImageLocked){
+	if(!isMovieScanning){
 		return;
 	}
 
@@ -190,34 +210,48 @@ function getCodeInfo(src){
 
 	canvas.drawImage(src, 0, 0, canvasElement.width, canvasElement.height);
 	var imageData = canvas.getImageData(0, 0, canvasElement.width, canvasElement.height);
-	var code = jsQR(imageData.data, imageData.width, imageData.height, {
-		inversionAttempts: "dontInvert",
-	});
+	var code = jsQR(imageData.data, imageData.width, imageData.height, {inversionAttempts: "dontInvert"});
 
 	if (code) {
-		isConfirmContactImageLocked = true;
+		isMovieScanning = false;
 		drawLine(code.location.topLeftCorner		, code.location.topRightCorner		,"#FF3B58");
 		drawLine(code.location.topRightCorner		, code.location.bottomRightCorner	,"#FF3B58");
 		drawLine(code.location.bottomRightCorner	, code.location.bottomLeftCorner	,"#FF3B58");
 		drawLine(code.location.bottomLeftCorner		, code.location.topLeftCorner		,"#FF3B58");
 
 		outputData.parentElement.hidden = false;
-		outputData.innerText = JSON.parse(code.data).data.publicKey;
+
+		if(currentTab == "tab_confirm"){
+			outputData.innerText = JSON.parse(code.data).data.publicKey;
+		}else if(currentTab == "tab_verify"){
+			var txHash = JSON.parse(code.data).data.hash;
+			txHttp.getTransaction(txHash)
+			.subscribe(x=>{
+			
+				outputData.innerText = x;
+			});
+			
+		}
+
 
 	} else {
 		outputData.parentElement.hidden = true;
 	}
 }
 
-//タブ選択
+//機能タブ選択コントローラ
 $(".nav-item a").click( function(e){
-
 
 	if(this.href.indexOf("tab_confirm") > 0){
 
-		isConfirmContactImageLocked = false;
+		currentTab = "tab_confirm";
+		isMovieScanning = true;
 
-		// Use facingMode: environment to attemt to get the front camera on phones
+		canvasElement = document.getElementById("canvas");
+		canvas = canvasElement.getContext("2d");
+		outputContainer = document.getElementById("output");
+		outputData = document.getElementById("outputData");
+
 		navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } }).then(function(stream) {
 			video.srcObject = stream;
 			window.localStream = stream;
@@ -225,6 +259,25 @@ $(".nav-item a").click( function(e){
 			video.play();
 			requestAnimationFrame(tick);
 		});
+
+	}else if(this.href.indexOf("tab_verify") > 0){
+
+		currentTab = "tab_verify";
+		isMovieScanning = true;
+
+		canvasElement = document.getElementById("canvas_verify");
+		canvas = canvasElement.getContext("2d");
+		outputContainer = document.getElementById("output_verify");
+		outputData = document.getElementById("outputData_verify");
+
+		navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } }).then(function(stream) {
+			video.srcObject = stream;
+			window.localStream = stream;
+			video.setAttribute("playsinline", true); // required to tell iOS safari we don't want fullscreen
+			video.play();
+			requestAnimationFrame(tick);
+		});
+
 	}else{
 
 		if(window.localStream != undefined){
@@ -234,38 +287,6 @@ $(".nav-item a").click( function(e){
 		}
 	}
 } );
-
-function dispAmount(amount,divisibility){
-
-	var strNum = amount.toString();
-	if(divisibility > 0){
-
-		if(amount < Math.pow(10, divisibility)){
-
-			return "0." + paddingAmount0(strNum,0,divisibility);
-
-		}else{
-
-			var r = strNum.slice(-divisibility);
-			var l = strNum.substring(0,strNum.length - divisibility);
-			return comma3(l) + "." + r;
-		}
-
-	}else{
-
-		return comma3(strNum);
-	}
-}
-function comma3(strNum){
-	return strNum.replace( /(\d)(?=(\d\d\d)+(?!\d))/g, '$1,');
-}
-
-function paddingAmount0(val,char,n){
-	for(; val.length < n; val= char + val);
-	return val;
-}
-
-$('#div1').collapse('show');
 
 $("#create").click(
 	function(){
@@ -296,7 +317,7 @@ $("#create").click(
 			err => console.error(err)
 		);
 
-		const contactQR = new qr.ContactQR("XEMHanco.1",alicePublicAccount);
+		const contactQR = new qr.ContactQR("xemhanco.contact.1",alicePublicAccount);
 		contactQR.toBase64()
 		.subscribe(x=>{
 			$('#contact').attr('src',x);
@@ -305,9 +326,61 @@ $("#create").click(
 	}
 );
 
-function loadImage(fileID) {
+//押印
+function signByHanco(confirmedAddress,divId){
 
-	var fileList = document.getElementById(fileID).files;
+	// 入力ダイアログを表示 ＋ 入力内容を user に代入
+	const pass = window.prompt("パスフレーズを入力してください", "");
+	const importAccount = qr.AccountQR.fromJSON(exportAccount.toJSON(),pass);
+
+	const tx = nem.TransferTransaction.create(
+		nem.Deadline.create(),
+		confirmedAddress,
+		[],
+		nem.PlainMessage.create($("#text_" + divId).val()),
+		nem.NetworkType.TEST_NET,
+		nem.UInt64.fromUint(100000)
+	);
+
+	const signedTx = importAccount.account.sign(tx,GENERATION_HASH);
+	delete importAccount;
+
+	const txHttp = new nem.TransactionHttp(NODE);
+	txHttp
+	.announce(signedTx)
+	.subscribe(_ => {
+		console.log(_);
+
+		const confirmListener = listener
+		.confirmed(alicePublicAccount.address)
+		.pipe(
+			op.filter((tx) => tx.transactionInfo !== undefined && tx.transactionInfo.hash === signedTx.hash),
+		)
+		.subscribe(
+			function(_){
+				$('#confirmed_' + divId + ' ul')
+				.append('<li><a target="_blank" href="http://explorer.symboldev.network/transaction/' + signedTx.hash + '">エクスプローラーで確認</a></li>');
+
+					const object = {"name":"xemhanco.tx.1","hash": signedTx.hash};
+					var request = qr.QRCodeGenerator.createExportObject(object);
+					request.generationHash = "";
+					request.toBase64().subscribe(x=>{
+
+						$('#confirmed_' + divId + ' ul')
+						.append('<li><img src=' + x + '></li>');
+
+					});
+			},
+			err => console.error(err)
+		);
+
+	}, err => console.error(err));
+	console.log("https://sym-test.opening-line.jp:3001/transaction/" + signedTx.hash +	"/status")
+}
+
+function setFileHash(divId) {
+
+	var fileList = document.getElementById("file_" + divId).files;
 	var reader = new FileReader();
 	file = fileList[0];
 	reader.readAsDataURL(file, "utf-8");
@@ -315,110 +388,14 @@ function loadImage(fileID) {
 		return function(e) {
 			const raw = CryptoJS.enc.Base64.parse(e.target.result.split(/,(.+)?/)[1]);
 			const sign = CryptoJS.SHA256(raw);
-			$("#text_selfsign").val(sign);
+			$("#text_" + divId).val(sign);
 		};
 	})(file);
 }
 
-$('#download_contact').click(function(e){
-	const contactQR = new qr.ContactQR("XEMHanco.1",alicePublicAccount);
-	contactQR.toBase64()
-	.subscribe(x=>{
-		this.href = x;
-	});
-});
+function scanFileImage(divId){
 
-$('#button_selfsign').click(function(e) {
-
-	// 入力ダイアログを表示 ＋ 入力内容を user に代入
-	const pass = window.prompt("パスフレーズを入力してください", "");
-	const importAccount = qr.AccountQR.fromJSON(exportAccount.toJSON(),pass);
-
-	const tx = nem.TransferTransaction.create(
-		nem.Deadline.create(),
-		importAccount.account.address,
-		[],
-		nem.PlainMessage.create($("#text_selfsign").val()),
-		nem.NetworkType.TEST_NET,
-		nem.UInt64.fromUint(100000)
-	);
-
-	const signedTx = importAccount.account.sign(tx,GENERATION_HASH);
-	delete importAccount;
-	const txHttp = new nem.TransactionHttp(NODE);
-	txHttp
-	.announce(signedTx)
-	.subscribe(_ => {
-		console.log(_);
-
-		let confirmListener = listener
-		.confirmed(alicePublicAccount.address)
-		.pipe(
-			op.filter((tx) => tx.transactionInfo !== undefined && tx.transactionInfo.hash === signedTx.hash),
-		)
-		.subscribe(
-			function(_){
-				$('#confirmed_selfsign ul').append('<li><a target="_blank" href="http://explorer.symboldev.network/transaction/' + signedTx.hash + '">エクスプローラーで確認</a></li>');
-				$('#div4').collapse('show');
-			},
-			err => console.error(err)
-		);
-
-	}, err => console.error(err));
-
-		console.log("https://sym-test.opening-line.jp:3001/transaction/" + signedTx.hash +	"/status")
-});
-
-
-$('#button_confirm').click(function(e) {
-
-	// 入力ダイアログを表示 ＋ 入力内容を user に代入
-	const pass = window.prompt("パスフレーズを入力してください", "");
-	const importAccount = qr.AccountQR.fromJSON(exportAccount.toJSON(),pass);
-
-	const confirmedAccount = nem.PublicAccount.createFromPublicKey(outputData.innerText,nem.NetworkType.TEST_NET);
-
-	const tx = nem.TransferTransaction.create(
-		nem.Deadline.create(),
-		confirmedAccount.address,
-		[],
-		nem.PlainMessage.create($("#text_confirm").val()),
-		nem.NetworkType.TEST_NET,
-		nem.UInt64.fromUint(100000)
-	);
-
-	const signedTx = importAccount.account.sign(tx,GENERATION_HASH);
-	delete importAccount;
-
-	const txHttp = new nem.TransactionHttp(NODE);
-	txHttp
-	.announce(signedTx)
-	.subscribe(_ => {
-		console.log(_);
-
-		let confirmListener = listener
-		.confirmed(alicePublicAccount.address)
-		.pipe(
-			op.filter((tx) => tx.transactionInfo !== undefined && tx.transactionInfo.hash === signedTx.hash),
-		)
-		.subscribe(
-			function(_){
-				$('#confirm_confirmed ul').append('<li><a target="_blank" href="http://explorer.symboldev.network/transaction/' + signedTx.hash + '">エクスプローラーで確認</a></li>');
-				$('#div5').collapse('show');
-			},
-			err => console.error(err)
-		);
-
-	}, err => console.error(err));
-
-		console.log("https://sym-test.opening-line.jp:3001/transaction/" + signedTx.hash +	"/status")
-});
-
-
-
-$('#confirm_image').change(function(e) {
-
-	isConfirmContactImageLocked = true;
+	isMovieScanning = false;
 	if(window.localStream != undefined){
 
 		window.localStream.getTracks().forEach( (track) => {
@@ -428,7 +405,7 @@ $('#confirm_image').change(function(e) {
 	canvasElement.hidden	 = false;
 	outputContainer.hidden = false;
 
-	var fileList = document.getElementById("confirm_image").files;
+	var fileList = document.getElementById("image_" + divId).files;
 	var reader = new FileReader();
 	file = fileList[0];
 	if (file.type == 'image/jpeg' || file.type == 'image/png'){
@@ -450,11 +427,45 @@ $('#confirm_image').change(function(e) {
 	} else {
 		alert('JPEGかPNGファイルをアップして下さい');
 	}
+}
+
+//承認：画像でスキャン
+$('#image_confirm').change(function(e) {
+
+	scanFileImage('confirm');
 });
 
-$('#file_selfsign').change(function(e) {
-	loadImage('file_selfsign');
+//検証：画像でスキャン
+$('#image_verify').change(function(e) {
+
+	scanFileImage('verify');
 });
+
+//口座：ダウンロード
+$('#download_contact').click(function(e){
+	const contactQR = new qr.ContactQR("xemhanco.contact.1",alicePublicAccount);
+	contactQR.toBase64()
+	.subscribe(x=>{
+		this.href = x;
+	});
+});
+
+//自署：押印
+$('#button_selfsign').click(function(e) {
+
+	signByHanco(alicePublicAccount.address,"selfsign")
+});
+
+//承認：押印
+$('#button_confirm').click(function(e) {
+
+	const confirmedAccount = nem.PublicAccount.createFromPublicKey(outputData.innerText,nem.NetworkType.TEST_NET);
+	signByHanco(confirmedAccount.address,"confirm")
+});
+
+
+$('#file_selfsign').change(function(e) {setFileHash('selfsign')});
+$('#file_confirm' ).change(function(e) {setFileHash('confirm')});
 
 $("#faucet").click(
 	function(){
@@ -465,6 +476,8 @@ $("#faucet").click(
 		return false;
 	}
 );
+
+$('#div1').collapse('show');
 
 })</script>
 </body>
