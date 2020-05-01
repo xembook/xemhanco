@@ -229,6 +229,8 @@ function getCodeInfo(src){
 			.subscribe(x=>{
 			
 				outputData.innerText = x;
+				outputData.innerText = x.signer.publicKey + "\n" + x.transactionInfo.hash;
+				
 			});
 			
 		}
