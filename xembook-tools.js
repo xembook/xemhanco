@@ -28,3 +28,18 @@ function paddingAmount0(val,char,n){
 	return val;
 }
 
+
+function dispTimeStamp(timeStamp){
+
+	var d = new Date(timeStamp)
+	var strDate = d.getFullYear()%100
+		+ "-" + paddingDate0( d.getMonth() + 1 )
+		+ '-' + paddingDate0( d.getDate() )
+		+ ' ' + paddingDate0( d.getHours() )
+		+ ':' + paddingDate0( d.getMinutes() ) ;
+	return 	strDate;
+}
+
+function paddingDate0(num) {
+	return ( num < 10 ) ? '0' + num  : num;
+};
