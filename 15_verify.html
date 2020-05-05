@@ -238,7 +238,7 @@ function getCodeInfo(src){
 			.subscribe(x=>{
 
 				$('#confirmed_verify ul')
-				.append('<li><a target="_blank" href="' + EXPLORER + '/transaction/' + x.transactionInfo.hash + '">エクスプローラーで確認</a></li>');
+				.append('<li><a target="_blank" href="' + EXPLORER + '/transaction/' + x.transactionInfo.hash + '">エクスプローラーで確認</a></li>')
 				.append('<li><b>口座ID:</b> <span>' + x.signer.publicKey + '</span></li>')
 				.append('<li><b>TX hash:</b> <span>' + x.transactionInfo.hash + '</span></li>')
 				.append('<li><b>署名テキスト:</b> <span>' + x.message.payload + '</span></li>')
