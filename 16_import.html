@@ -175,18 +175,18 @@ listener.open().then(() => {
 	setInterval(function(){listener.newBlock()}, 30000);
 });
 
-var isMovieScanning = false;
 var alicePublicAccount;
 var exportAccount;
-
-var bob = nem.Account.generateNewAccount(nem.NetworkType.MIJIN_TEST);
-var privateKey = bob.privateKey;
-
-var video = document.createElement("video");
 var canvasElement;
 var canvas;
 var outputData;
 var currentTab;
+
+var isMovieScanning = false;
+var video = document.createElement("video");
+
+var bob = nem.Account.generateNewAccount(nem.NetworkType.MIJIN_TEST);
+var privateKey = bob.privateKey;
 
 function drawLine(begin, end, color) {
 	canvas.beginPath();
@@ -218,35 +218,15 @@ function getCodeInfo(src){
 
 	if (code) {
 		isMovieScanning = false;
+		outputData.parentElement.hidden = false;
+
 		drawLine(code.location.topLeftCorner		, code.location.topRightCorner		,"#FF3B58");
 		drawLine(code.location.topRightCorner		, code.location.bottomRightCorner	,"#FF3B58");
 		drawLine(code.location.bottomRightCorner	, code.location.bottomLeftCorner	,"#FF3B58");
 		drawLine(code.location.bottomLeftCorner		, code.location.topLeftCorner		,"#FF3B58");
 
-		outputData.parentElement.hidden = false;
+		resultQR(code.data);
 
-		if(currentTab == "tab_confirm"){
-			outputData.innerText = JSON.parse(code.data).data.publicKey;
-		}else if(currentTab == "tab_verify"){
-			var txHash = JSON.parse(code.data).data.hash;
-			txHttp.getTransaction(txHash)
-			.subscribe(x=>{
-
-				$('#confirmed_verify ul')
-				.append('<li><a target="_blank" href="' + EXPLORER + '/transaction/' + x.transactionInfo.hash + '">エクスプローラーで確認</a></li>')
-				.append('<li><b>口座ID:</b> <span>' + x.signer.publicKey + '</span></li>')
-				.append('<li><b>TX hash:</b> <span>' + x.transactionInfo.hash + '</span></li>')
-				.append('<li><b>署名テキスト:</b> <span>' + x.message.payload + '</span></li>')
-
-				blockHttp.getBlockByHeight(x.transactionInfo.height).subscribe(b=>{
-
-					$('#confirmed_verify ul')
-					.append('<li><b>タイムスタンプ:</b> <span>' + dispTimeStamp(b.timestamp.compact()  + SYMBOL_EPOCH * 1000) + '</span></li>');
-				});
-			});
-		}else if(currentTab == "tab_"){
-			outputData.innerText = code.data;
-		}
 	} else {
 		outputData.parentElement.hidden = true;
 	}
@@ -277,26 +257,6 @@ function stopVideo(){
 		});
 	}
 }
-
-//機能タブ選択コントローラ
-$(".nav-item a").click( function(e){
-
-	if( this.href.indexOf("tab_confirm") > 0){
-
-		$('#modal-label').text("承認したいQRコードをスキャンしてください")
-		$('#modal-qrscan').modal('show');
-		startVideo("confirm");
-
-	}else if(this.href.indexOf("tab_verify" ) > 0){
-
-		$('#modal-label').text("検証したいQRコードをスキャンしてください")
-		$('#modal-qrscan').modal('show');
-		startVideo("verify");
-
-	}else{
-		stopVideo();
-	}
-});
 
 function showAccountQR(){
 
@@ -331,59 +291,6 @@ function showAccountQR(){
 		$('#text_contact').text(alicePublicAccount.publicKey);
 	});
 }
-
-$("#modal_ok").click(function(){
-
-	if(currentTab == "tab_confirm"){
-		outputData.innerText = JSON.parse(code.data).data.publicKey;
-	}else if(currentTab == "tab_verify"){
-	}else if(currentTab == "tab_"){
-
-		const importAccount = qr.AccountQR.fromJSON(outputData.innerText,$("#pass").val());
-		alicePublicAccount = importAccount.account.publicAccount;
-		exportAccount = new qr.AccountQR(importAccount,$("#pass").val(), nem.NetworkType.TEST_NET);
-		delete importAccount;
-		showAccountQR();
-
-		accountHttp.getAccountInfo(alicePublicAccount.address)
-		.pipe(
-			op.mergeMap(_=>_.mosaics),
-			op.filter(_ => _.id.toHex() === CURRENCY)
-		)
-		.subscribe(
-			function(_){
-				$("#amount").text(dispAmount(_.amount.toString(),6) + " XYM");
-				$('#div3').collapse('show');
-			},
-			err => console.error(err)
-		);
-	}
-});
-
-$("#create").click(function(){
-
-	const alice = nem.Account.generateNewAccount(nem.NetworkType.TEST_NET);
-	alicePublicAccount = alice.publicAccount;
-	exportAccount = new qr.AccountQR(alice,$("#pass").val(), nem.NetworkType.TEST_NET);
-	delete alice;
-	showAccountQR();
-});
-
-//復元
-$("#restore").click(function(){
-
-	$('#modal-label').text("復元したいNEMはんこのQRコードをスキャンしてください")
-	$('#modal-qrscan').modal('show');
-	startVideo("");
-});
-
-$('#modal-qrscan').on('hide.bs.modal', function (e) {
-
-	stopVideo();
-	canvas.clearRect(0, 0, canvasElement.width, canvasElement.height);
-	$('#image_').val("");
-	outputData.innerText = "";
-})
 
 //押印
 function signByHanco(confirmedAddress,divId){
@@ -474,6 +381,120 @@ function scanFileImage(){
 		alert('JPEGかPNGファイルをアップして下さい');
 	}
 }
+
+//■■■CONTROLLER■■■
+
+//タブ選択時
+$(".nav-item a").click( function(e){
+
+	if( this.href.indexOf("tab_confirm") > 0){
+
+		$('#modal-label').text("承認したいQRコードをスキャンしてください")
+		$('#modal-qrscan').modal('show');
+		startVideo("confirm");
+
+	}else if(this.href.indexOf("tab_verify" ) > 0){
+
+		$('#modal-label').text("検証したいQRコードをスキャンしてください")
+		$('#modal-qrscan').modal('show');
+		startVideo("verify");
+
+	}else{
+		stopVideo();
+	}
+});
+
+//モーダルウィンドウOKクリック時
+$("#modal_ok").click(function(){
+
+	if(currentTab == "tab_confirm"){
+		outputData.innerText = JSON.parse(code.data).data.publicKey;
+	}else if(currentTab == "tab_verify"){
+	}else if(currentTab == "tab_"){
+
+		const importAccount = qr.AccountQR.fromJSON(outputData.innerText,$("#pass").val());
+		alicePublicAccount = importAccount.account.publicAccount;
+		exportAccount = new qr.AccountQR(importAccount,$("#pass").val(), nem.NetworkType.TEST_NET);
+		delete importAccount;
+		showAccountQR();
+
+		accountHttp.getAccountInfo(alicePublicAccount.address)
+		.pipe(
+			op.mergeMap(_=>_.mosaics),
+			op.filter(_ => _.id.toHex() === CURRENCY)
+		)
+		.subscribe(
+			function(_){
+				$("#amount").text(dispAmount(_.amount.toString(),6) + " XYM");
+				$('#div3').collapse('show');
+			},
+			err => console.error(err)
+		);
+	}
+});
+
+//QRコードスキャン完了時
+function resultQR(data){
+
+	if(currentTab == "tab_confirm"){
+
+		outputData.innerText = JSON.parse(data).data.publicKey;		
+
+	}else if(currentTab == "tab_verify"){
+	
+		//トランザクション承認
+		//署名者の口座ID
+		//申請者の口座ID
+		//対象トランザクション
+		//対象トランザクションの署名テキスト
+
+		var txHash = JSON.parse(data).data.hash;
+		txHttp.getTransaction(txHash)
+		.subscribe(x=>{
+
+			$('#confirmed_verify ul')
+			.append('<li><a target="_blank" href="' + EXPLORER + '/transaction/' + x.transactionInfo.hash + '">エクスプローラーで確認</a></li>')
+			.append('<li><b>口座ID:</b> <span>' + x.signer.publicKey + '</span></li>')
+			.append('<li><b>TX hash:</b> <span>' + x.transactionInfo.hash + '</span></li>')
+			.append('<li><b>署名テキスト:</b> <span>' + x.message.payload + '</span></li>')
+
+			blockHttp.getBlockByHeight(x.transactionInfo.height).subscribe(b=>{
+
+				$('#confirmed_verify ul')
+				.append('<li><b>タイムスタンプ:</b> <span>' + dispTimeStamp(b.timestamp.compact()  + SYMBOL_EPOCH * 1000) + '</span></li>');
+			});
+		});
+	}else if(currentTab == "tab_"){
+		outputData.innerText = data;
+	}
+}
+
+//■■■VIEW■■■
+
+$("#create").click(function(){
+
+	const alice = nem.Account.generateNewAccount(nem.NetworkType.TEST_NET);
+	alicePublicAccount = alice.publicAccount;
+	exportAccount = new qr.AccountQR(alice,$("#pass").val(), nem.NetworkType.TEST_NET);
+	delete alice;
+	showAccountQR();
+});
+
+//復元
+$("#restore").click(function(){
+
+	$('#modal-label').text("復元したいNEMはんこのQRコードをスキャンしてください")
+	$('#modal-qrscan').modal('show');
+	startVideo("");
+});
+
+$('#modal-qrscan').on('hide.bs.modal', function (e) {
+
+	stopVideo();
+	canvas.clearRect(0, 0, canvasElement.width, canvasElement.height);
+	$('#image_').val("");
+	outputData.innerText = "";
+})
 
 
 $('#image_'       ).change(function(e) {scanFileImage();});
