@@ -28,18 +28,10 @@
 	<div class="collapse" id="div3">
 		<hr>
 		<ul class="nav nav-tabs">
-			<li class="nav-item">
-			<a href="#tab_contact" class="nav-link active" data-toggle="tab">口座</a>
-			</li>
-			<li class="nav-item">
-				<a href="#tab_selfsign" class="nav-link" data-toggle="tab">自署</a>
-			</li>
-			<li class="nav-item">
-				<a href="#tab_confirm" class="nav-link" data-toggle="tab">承認</a>
-			</li>
-			<li class="nav-item">
-				<a href="#tab_verify" class="nav-link" data-toggle="tab">検証</a>
-			</li>
+			<li class="nav-item"><a href="#tab_contact"  data-toggle="tab" class="nav-link active">口座</a></li>
+			<li class="nav-item"><a href="#tab_selfsign" data-toggle="tab" class="nav-link"       >自署</a></li>
+			<li class="nav-item"><a href="#tab_confirm"  data-toggle="tab" class="nav-link"       >承認</a></li>
+			<li class="nav-item"><a href="#tab_verify"   data-toggle="tab" class="nav-link"       >検証</a></li>
 		</ul>
 
 		<div class="tab-content">
@@ -104,17 +96,17 @@
 
 
 <!-- モーダルの設定 -->
-<div class="modal fade" id="myModal3" tabindex="-1" role="dialog" aria-labelledby="myModalLabel">
-    <div class="modal-dialog" role="document">
-        <div class="modal-content">
-            <div class="modal-header">
-	            <h5 class="modal-title" id="exampleModalLabel2">QRスキャン</h5>
-	            <button type="button" class="close" data-dismiss="modal" aria-label="閉じる">
-	                <span aria-hidden="true">&times;</span>
-	            </button>
-	        </div>
-	        <div class="modal-body">
-				<label>検証QRスキャン:</label>
+<div class="modal fade" id="modal-qrscan" tabindex="-1" role="dialog" aria-labelledby="myModalLabel">
+	<div class="modal-dialog" role="document">
+		<div class="modal-content">
+			<div class="modal-header">
+				<h5 class="modal-title" id="exampleModalLabel2">QRスキャン</h5>
+				<button type="button" class="close" data-dismiss="modal" aria-label="閉じる">
+					<span aria-hidden="true">&times;</span>
+				</button>
+			</div>
+			<div class="modal-body">
+				<label id="modal-label"></label>
 				<div class="input-group">
 					<label class="input-group-btn">
 						<span class="btn btn-primary">
@@ -124,13 +116,13 @@
 				</div>
 				<canvas id="canvas_" hidden></canvas>
 				<div hidden><span id="outputData_"></span></div>
-	        </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-default" data-dismiss="modal">キャンセル</button>
-                <button type="button" class="btn btn-primary" data-dismiss="modal"  id="modal_ok">OK</button>
-            </div><!-- /.modal-footer -->
-        </div><!-- /.modal-content -->
-    </div><!-- /.modal-dialog -->
+			</div>
+			<div class="modal-footer">
+				<button type="button" class="btn btn-default" data-dismiss="modal">キャンセル</button>
+				<button type="button" class="btn btn-primary" data-dismiss="modal"	id="modal_ok">OK</button>
+			</div><!-- /.modal-footer -->
+		</div><!-- /.modal-content -->
+	</div><!-- /.modal-dialog -->
 </div><!-- /.modal -->
 
 
@@ -265,9 +257,9 @@ function startVideo(divId){
 	currentTab = "tab_" + divId;
 	isMovieScanning = true;
 
-	canvasElement = document.getElementById("canvas_" + divId);
-	canvas        = canvasElement.getContext("2d");
-	outputData    = document.getElementById("outputData_" + divId);
+	canvasElement = document.getElementById("canvas_");
+	canvas		  = canvasElement.getContext("2d");
+	outputData	  = document.getElementById("outputData_");
 
 	navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } }).then(function(stream) {
 		video.srcObject = stream;
@@ -289,15 +281,17 @@ function stopVideo(){
 //機能タブ選択コントローラ
 $(".nav-item a").click( function(e){
 
-	if(      this.href.indexOf("tab_confirm") > 0){
+	if( this.href.indexOf("tab_confirm") > 0){
 
-		$('#myModal3').modal('show');
+		$('#modal-label').text("承認したいQRコードをスキャンしてください")
+		$('#modal-qrscan').modal('show');
 		startVideo("confirm");
 
 	}else if(this.href.indexOf("tab_verify" ) > 0){
 
-		$('#myModal3').modal('show');
-		startVideo("verify" );
+		$('#modal-label').text("検証したいQRコードをスキャンしてください")
+		$('#modal-qrscan').modal('show');
+		startVideo("verify");
 
 	}else{
 		stopVideo();
@@ -312,6 +306,7 @@ function showAccountQR(){
 		$('#div2').collapse('show');
 		$('#hanco').attr('src',x);
 	});
+
 
 	listener
 	.confirmed(alicePublicAccount.address)
@@ -339,8 +334,6 @@ function showAccountQR(){
 
 $("#modal_ok").click(function(){
 
-	stopVideo();
-
 	if(currentTab == "tab_confirm"){
 		outputData.innerText = JSON.parse(code.data).data.publicKey;
 	}else if(currentTab == "tab_verify"){
@@ -351,6 +344,19 @@ $("#modal_ok").click(function(){
 		exportAccount = new qr.AccountQR(importAccount,$("#pass").val(), nem.NetworkType.TEST_NET);
 		delete importAccount;
 		showAccountQR();
+
+		accountHttp.getAccountInfo(alicePublicAccount.address)
+		.pipe(
+			op.mergeMap(_=>_.mosaics),
+			op.filter(_ => _.id.toHex() === CURRENCY)
+		)
+		.subscribe(
+			function(_){
+				$("#amount").text(dispAmount(_.amount.toString(),6) + " XYM");
+				$('#div3').collapse('show');
+			},
+			err => console.error(err)
+		);
 	}
 });
 
@@ -365,13 +371,17 @@ $("#create").click(function(){
 
 //復元
 $("#restore").click(function(){
-	$('#myModal3').modal('show');
+
+	$('#modal-label').text("復元したいNEMはんこのQRコードをスキャンしてください")
+	$('#modal-qrscan').modal('show');
 	startVideo("");
 });
 
-$('#myModal3').on('hide.bs.modal', function (e) {
-	console.log("hide modeal");
-	canvas.clearRect(0, 0, canvas.width, canvas.height);
+$('#modal-qrscan').on('hide.bs.modal', function (e) {
+
+	stopVideo();
+	canvas.clearRect(0, 0, canvasElement.width, canvasElement.height);
+	$('#image_').val("");
 	outputData.innerText = "";
 })
 
@@ -417,42 +427,41 @@ function signByHanco(confirmedAddress,divId){
 			});
 		},err => console.error(err));
 	}, err => console.error(err));
-	console.log(NODE + "/transaction/" + signedTx.hash + "/status")
+	console.log(NODE + "/transaction/" + signedTx.hash + "/status");
 }
 
 function setFileHash(divId) {
 
-	var fileList = document.getElementById("file_" + divId).files;
-	var reader = new FileReader();
-	file = fileList[0];
+	const fileList = document.getElementById("file_" + divId).files;
+	const reader = new FileReader();
+	const file = fileList[0];
 	reader.readAsDataURL(file, "utf-8");
-	reader.onload = (function(theFile) {
+	reader.onload = (function(_) {
 		return function(e) {
-			const raw = CryptoJS.enc.Base64.parse(e.target.result.split(/,(.+)?/)[1]);
+			const raw  = CryptoJS.enc.Base64.parse(e.target.result.split(/,(.+)?/)[1]);
 			const sign = CryptoJS.SHA256(raw);
 			$("#text_" + divId).val(sign);
 		};
 	})(file);
 }
 
-function scanFileImage(divId){
+function scanFileImage(){
 
 	isMovieScanning = false;
 	canvasElement.hidden = false;
 
 	stopVideo();
 
-	const fileList = document.getElementById("image_" + divId).files;
-	var reader = new FileReader();
-	file = fileList[0];
+	const fileList = document.getElementById("image_").files;
+	const reader = new FileReader();
+	const file = fileList[0];
 	if (file.type == 'image/jpeg' || file.type == 'image/png'){
 		reader.readAsDataURL(file, "utf-8");
-		reader.onload = (function(theFile) {
+		reader.onload = (function(_) {
 			return function(e) {
 
-				var data = e.target.result;
-				var img = new Image();
-				img.src = data;
+				const img = new Image();
+				img.src = e.target.result;
 				img.onload = function() {
 
 					canvasElement.height = img.width;
@@ -466,13 +475,8 @@ function scanFileImage(divId){
 	}
 }
 
-//承認：画像でスキャン
-$('#image_confirm').change(function(e) {scanFileImage('confirm');});
 
-//検証：画像でスキャン
-$('#image_verify' ).change(function(e) {scanFileImage('verify');});
-$('#image_'       ).change(function(e) {scanFileImage('');});
-
+$('#image_'       ).change(function(e) {scanFileImage();});
 $('#file_selfsign').change(function(e) {setFileHash('selfsign')});
 $('#file_confirm' ).change(function(e) {setFileHash('confirm')});
 
