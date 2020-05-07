@@ -26,7 +26,7 @@
 	</div>
 
 	<div class="collapse" id="div3">
-<hr>
+		<hr>
 		<ul class="nav nav-tabs">
 			<li class="nav-item">
 			<a href="#tab_contact" class="nav-link active" data-toggle="tab">口座</a>
@@ -74,19 +74,7 @@
 			<!-- 承認 -->
 			<div id="tab_confirm" class="tab-pane">
 
-				<label>申請者QRスキャン:</label>
-				<div class="input-group">
-					<label class="input-group-btn">
-						<span class="btn btn-primary">
-							画像でスキャン<input id="image_confirm" type="file" style="display:none">
-						</span>
-					</label>
-				</div>
-
-				<canvas id="canvas_confirm" hidden></canvas>
-				<div id="output_confirm" hidden>
-					<div hidden><b>申請者口座ID:</b> <span id="outputData_confirm"></span></div>
-				</div>
+				<div><b>申請者口座ID:</b> <span id="outputData_confirm"></span></div>
 
 				<label>承認テキスト:</label>
 				<input type="text" id="text_confirm" class="form-control">
@@ -103,18 +91,7 @@
 
 			<!-- 検証 -->
 			<div id="tab_verify" class="tab-pane">
-				<label>検証QRスキャン:</label>
-				<div class="input-group">
-					<label class="input-group-btn">
-						<span class="btn btn-primary">
-							画像でスキャン<input id="image_verify" type="file" style="display:none">
-						</span>
-					</label>
-				</div>
-				<canvas id="canvas_verify" hidden></canvas>
-				<div id="output_verify" hidden>
-					<div hidden><span id="outputData_verify"></span></div>
-				</div>
+				<div><span id="outputData_verify"></span></div>
 				<div id="confirmed_verify"><ul></ul></div>
 
 <!--				<div><button type="button" id="button_verify" class="btn btn-primary">監査</button></div>
@@ -124,6 +101,8 @@
 		</div>
 	</div><!-- div3 -->
 </div>
+
+
 <!-- モーダルの設定 -->
 <div class="modal fade" id="myModal3" tabindex="-1" role="dialog" aria-labelledby="myModalLabel">
     <div class="modal-dialog" role="document">
@@ -135,7 +114,6 @@
 	            </button>
 	        </div>
 	        <div class="modal-body">
-
 				<label>検証QRスキャン:</label>
 				<div class="input-group">
 					<label class="input-group-btn">
@@ -145,15 +123,11 @@
 					</label>
 				</div>
 				<canvas id="canvas_" hidden></canvas>
-				<div id="output_" hidden>
-					<div hidden><span id="outputData_"></span></div>
-				</div>
-				<div id="confirmed_"><ul></ul></div>
+				<div hidden><span id="outputData_"></span></div>
 	        </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-default" data-dismiss="modal">キャンセル</button>
                 <button type="button" class="btn btn-primary" data-dismiss="modal"  id="modal_ok">OK</button>
-
             </div><!-- /.modal-footer -->
         </div><!-- /.modal-content -->
     </div><!-- /.modal-dialog -->
@@ -219,10 +193,8 @@ var privateKey = bob.privateKey;
 var video = document.createElement("video");
 var canvasElement;
 var canvas;
-var outputContainer;
 var outputData;
 var currentTab;
-
 
 function drawLine(begin, end, color) {
 	canvas.beginPath();
@@ -238,7 +210,6 @@ function tick() {
 
 	if (video.readyState === video.HAVE_ENOUGH_DATA) {
 		canvasElement.hidden   = false;
-		outputContainer.hidden = false;
 		canvasElement.width  = 450;
 		canvasElement.height = 450 * video.videoHeight / video.videoWidth;
 
@@ -295,9 +266,8 @@ function startVideo(divId){
 	isMovieScanning = true;
 
 	canvasElement = document.getElementById("canvas_" + divId);
-	canvas = canvasElement.getContext("2d");
-	outputContainer = document.getElementById("output_" + divId);
-	outputData = document.getElementById("outputData_" + divId);
+	canvas        = canvasElement.getContext("2d");
+	outputData    = document.getElementById("outputData_" + divId);
 
 	navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } }).then(function(stream) {
 		video.srcObject = stream;
@@ -319,71 +289,25 @@ function stopVideo(){
 //機能タブ選択コントローラ
 $(".nav-item a").click( function(e){
 
-	if(      this.href.indexOf("tab_confirm") > 0){ startVideo("confirm");
-	}else if(this.href.indexOf("tab_verify" ) > 0){ startVideo("verify" );
-	}else{ stopVideo();
+	if(      this.href.indexOf("tab_confirm") > 0){
+
+		$('#myModal3').modal('show');
+		startVideo("confirm");
+
+	}else if(this.href.indexOf("tab_verify" ) > 0){
+
+		$('#myModal3').modal('show');
+		startVideo("verify" );
+
+	}else{
+		stopVideo();
 	}
 });
 
+function showAccountQR(){
 
-$("#modal_ok").click(function(){
-
-	stopVideo();
-
-	if(currentTab == "tab_confirm"){
-		outputData.innerText = JSON.parse(code.data).data.publicKey;
-	}else if(currentTab == "tab_verify"){
-	}else if(currentTab == "tab_"){
-
-		const importAccount = qr.AccountQR.fromJSON(outputData.innerText,$("#pass").val());
-		alicePublicAccount = importAccount.account.publicAccount;
-		exportAccount = new qr.AccountQR(importAccount,$("#pass").val(), nem.NetworkType.TEST_NET);
-		delete importAccount;
-		exportAccount.toBase64()
-		.subscribe(x=>{
-			$('#div1').collapse('hide');
-			$('#div2').collapse('show');
-			$('#hanco').attr('src',x);
-		});
-
-		listener
-		.confirmed(alicePublicAccount.address)
-		.pipe(
-			op.delay(1000),
-			op.mergeMap(x=>accountHttp.getAccountInfo(alicePublicAccount.address)),
-			op.mergeMap(_=>_.mosaics),
-			op.filter(_ => _.id.toHex() === CURRENCY)
-		)
-		.subscribe(
-			function(_){
-				$("#amount").text(dispAmount(_.amount.toString(),6) + " XYM");
-				$('#div3').collapse('show');
-			},
-			err => console.error(err)
-		);
-
-		const contactQR = new qr.ContactQR("xemhanco.contact.1",alicePublicAccount);
-		contactQR.toBase64()
-		.subscribe(x=>{
-			$('#contact').attr('src',x);
-			$('#text_contact').text(alicePublicAccount.publicKey);
-		});
-	}
-
-});
-$("#restore").click(function(){
-	$('#myModal3').modal('show');
-	startVideo("");
-});
-
-$("#create").click(function(){
-
-	const alice = nem.Account.generateNewAccount(nem.NetworkType.TEST_NET);
-	alicePublicAccount = alice.publicAccount;
-	exportAccount = new qr.AccountQR(alice,$("#pass").val(), nem.NetworkType.TEST_NET);
-	delete alice;
 	exportAccount.toBase64()
-	.subscribe(x=>{
+	.subscribe(x =>{
 		$('#div1').collapse('hide');
 		$('#div2').collapse('show');
 		$('#hanco').attr('src',x);
@@ -411,7 +335,45 @@ $("#create").click(function(){
 		$('#contact').attr('src',x);
 		$('#text_contact').text(alicePublicAccount.publicKey);
 	});
+}
+
+$("#modal_ok").click(function(){
+
+	stopVideo();
+
+	if(currentTab == "tab_confirm"){
+		outputData.innerText = JSON.parse(code.data).data.publicKey;
+	}else if(currentTab == "tab_verify"){
+	}else if(currentTab == "tab_"){
+
+		const importAccount = qr.AccountQR.fromJSON(outputData.innerText,$("#pass").val());
+		alicePublicAccount = importAccount.account.publicAccount;
+		exportAccount = new qr.AccountQR(importAccount,$("#pass").val(), nem.NetworkType.TEST_NET);
+		delete importAccount;
+		showAccountQR();
+	}
 });
+
+$("#create").click(function(){
+
+	const alice = nem.Account.generateNewAccount(nem.NetworkType.TEST_NET);
+	alicePublicAccount = alice.publicAccount;
+	exportAccount = new qr.AccountQR(alice,$("#pass").val(), nem.NetworkType.TEST_NET);
+	delete alice;
+	showAccountQR();
+});
+
+//復元
+$("#restore").click(function(){
+	$('#myModal3').modal('show');
+	startVideo("");
+});
+
+$('#myModal3').on('hide.bs.modal', function (e) {
+	console.log("hide modeal");
+	canvas.clearRect(0, 0, canvas.width, canvas.height);
+	outputData.innerText = "";
+})
 
 //押印
 function signByHanco(confirmedAddress,divId){
@@ -442,17 +404,17 @@ function signByHanco(confirmedAddress,divId){
 			op.filter((tx) => tx.transactionInfo !== undefined && tx.transactionInfo.hash === signedTx.hash),
 		)
 		.subscribe(function(_){
+			$('#confirmed_' + divId + ' ul')
+			.append('<li><a target="_blank" href="' + EXPLORER + '/transaction/' + signedTx.hash + '">エクスプローラーで確認</a></li>');
+
+			const object = {"name":"xemhanco.tx.1","hash": signedTx.hash};
+			var obj = qr.QRCodeGenerator.createExportObject(object);
+			obj.generationHash = "";
+			obj.toBase64().subscribe(x=>{
+
 				$('#confirmed_' + divId + ' ul')
-				.append('<li><a target="_blank" href="' + EXPLORER + '/transaction/' + signedTx.hash + '">エクスプローラーで確認</a></li>');
-
-				const object = {"name":"xemhanco.tx.1","hash": signedTx.hash};
-				var request = qr.QRCodeGenerator.createExportObject(object);
-				request.generationHash = "";
-				request.toBase64().subscribe(x=>{
-
-					$('#confirmed_' + divId + ' ul')
-					.append('<li><img src=' + x + '></li>');
-				});
+				.append('<li><img src=' + x + '></li>');
+			});
 		},err => console.error(err));
 	}, err => console.error(err));
 	console.log(NODE + "/transaction/" + signedTx.hash + "/status")
@@ -476,8 +438,7 @@ function setFileHash(divId) {
 function scanFileImage(divId){
 
 	isMovieScanning = false;
-	canvasElement.hidden	 = false;
-	outputContainer.hidden = false;
+	canvasElement.hidden = false;
 
 	stopVideo();
 
@@ -510,6 +471,8 @@ $('#image_confirm').change(function(e) {scanFileImage('confirm');});
 
 //検証：画像でスキャン
 $('#image_verify' ).change(function(e) {scanFileImage('verify');});
+$('#image_'       ).change(function(e) {scanFileImage('');});
+
 $('#file_selfsign').change(function(e) {setFileHash('selfsign')});
 $('#file_confirm' ).change(function(e) {setFileHash('confirm')});
 
