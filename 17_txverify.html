@@ -99,7 +99,6 @@
 	</div><!-- div3 -->
 </div>
 
-
 <!-- モーダルの設定 -->
 <div class="modal fade" id="modal-qrscan" tabindex="-1" role="dialog" aria-labelledby="myModalLabel">
 	<div class="modal-dialog" role="document">
@@ -188,7 +187,7 @@ listener.open().then(() => {
 
 //グローバル変数
 var alicePublicAccount;
-var exportJSON;
+var aliceJSON;
 var canvasElement;
 var canvas;
 var outputData;
@@ -196,8 +195,6 @@ var currentTab;
 
 var isMovieScanning = false;
 var video = document.createElement("video");
-
-
 
 function drawLine(begin, end, color) {
 	canvas.beginPath();
@@ -212,7 +209,7 @@ function tick() {
 	if(!isMovieScanning){return;}
 
 	if (video.readyState === video.HAVE_ENOUGH_DATA) {
-		canvasElement.hidden   = false;
+		canvasElement.hidden = false;
 		canvasElement.width  = 450;
 		canvasElement.height = 450 * video.videoHeight / video.videoWidth;
 
@@ -312,10 +309,10 @@ function signByHanco(confirmedAddress,divId,message){
 
 	// 入力ダイアログを表示 ＋ 入力内容を user に代入
 	const pass = window.prompt("パスフレーズを入力してください", "");
-	const importAccount = qr.AccountQR.fromJSON(exportJSON,pass);
+	const aliceQR = qr.AccountQR.fromJSON(aliceJSON,pass);
 	delete pass;
-	const signedTx = importAccount.account.sign(tx,GENERATION_HASH);
-	delete importAccount;
+	const signedTx = aliceQR.account.sign(tx,GENERATION_HASH);
+	delete aliceQR;
 	const txHttp = new nem.TransactionHttp(NODE);
 	txHttp.announce(signedTx)
 	.subscribe(_ => {
@@ -462,14 +459,14 @@ $("#modal_ok").click(function(){
 
 	}else if(currentTab == "tab_"){ //復元
 
-		const importAccount = qr.AccountQR.fromJSON(outputData.innerText,$("#pass").val());
-		alicePublicAccount = importAccount.account.publicAccount;
-		importAccount.toBase64()
+		const aliceQR = qr.AccountQR.fromJSON(outputData.innerText,$("#pass").val());
+		alicePublicAccount = aliceQR.account.publicAccount;
+		aliceQR.toBase64()
 		.subscribe(x =>{
 			showAccountQR(x);
 		});
-		exportJSON = importAccount.toJSON();
-		delete importAccount;
+		aliceJSON = aliceQR.toJSON();
+		delete aliceQR;
 
 		accountHttp.getAccountInfo(alicePublicAccount.address)
 		.pipe(
@@ -492,16 +489,16 @@ $("#create").click(function(){
 
 	const alice = nem.Account.generateNewAccount(nem.NetworkType.TEST_NET);
 	alicePublicAccount = alice.publicAccount;
-	const importAccount = new qr.AccountQR(alice,$("#pass").val(),nem.NetworkType.TEST_NET);
+	const aliceQR = new qr.AccountQR(alice,$("#pass").val(),nem.NetworkType.TEST_NET);
 
-	importAccount.toBase64()
+	aliceQR.toBase64()
 	.subscribe(x =>{
 		showAccountQR(x);
 	});
 
-	exportJSON = importAccount.toJSON();
+	aliceJSON = aliceQR.toJSON();
 	delete alice;
-	delete importAccount;
+	delete aliceQR;
 	//showAccountQR();
 });
 
