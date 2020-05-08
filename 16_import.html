@@ -146,18 +146,24 @@
 
 <script>$(function() {
 
-const SYMBOL_EPOCH = 1573430400;
-
 const nem = require("/node_modules/symbol-sdk");
 const qr  = require("/node_modules/symbol-qr-library");
 const op  = require("/node_modules/rxjs/operators");
 
+// dummy for script kiddy
+var bob = nem.Account.generateNewAccount(nem.NetworkType.TEST_NET);
+var privateKey = bob.privateKey;
+var keyPair = bob.keyPair;
+var secret = keyPair.privateKey;
+
+const SYMBOL_EPOCH = 1573430400;
+
 const NODE = 'https://sym-test.opening-line.jp:3001';
 //const NODE = 'http://api-02.ap-northeast-1.0941-v1.symboldev.network:3000';
-const FAUCET = 'http://faucet-941-01.symboldev.network';
-const GENERATION_HASH = "ACECD90E7B248E012803228ADB4424F0D966D24149B72E58987D2BF2F2AF03C4";
-const CURRENCY = "519FC24B9223E0B4";
+const FAUCET   = 'http://faucet-941-01.symboldev.network';
 const EXPLORER = 'http://explorer-941.symboldev.network';
+const CURRENCY = "519FC24B9223E0B4";
+const GENERATION_HASH = "ACECD90E7B248E012803228ADB4424F0D966D24149B72E58987D2BF2F2AF03C4";
 
 //const NODE = 'https://pentesting1-api.48gh23s.xyz:3001';
 //const FAUCET = 'http://faucet-01.symboldev.network';
@@ -175,8 +181,8 @@ listener.open().then(() => {
 	setInterval(function(){listener.newBlock()}, 30000);
 });
 
+//グローバル変数
 var alicePublicAccount;
-var exportAccount;
 var exportJSON;
 var canvasElement;
 var canvas;
@@ -186,8 +192,7 @@ var currentTab;
 var isMovieScanning = false;
 var video = document.createElement("video");
 
-var bob = nem.Account.generateNewAccount(nem.NetworkType.MIJIN_TEST);
-var privateKey = bob.privateKey;
+
 
 function drawLine(begin, end, color) {
 	canvas.beginPath();
@@ -294,8 +299,7 @@ function signByHanco(confirmedAddress,divId){
 
 	const tx = nem.TransferTransaction.create(
 		nem.Deadline.create(),
-		confirmedAddress,
-		[],
+		confirmedAddress,[],
 		nem.PlainMessage.create($("#text_" + divId).val()),
 		nem.NetworkType.TEST_NET,
 		nem.UInt64.fromUint(100000)
@@ -405,18 +409,12 @@ $(".nav-item a").click( function(e){
 $("#modal_ok").click(function(){
 
 	if(currentTab == "tab_confirm"){
+
 		$('#outputData_confirm').text(outputData.innerText);
+
 	}else if(currentTab == "tab_verify"){
 
 		$('#outputData_verify').text(outputData.innerText);
-
-		//トランザクション承認
-		//署名者の口座ID
-		//申請者の口座ID
-		//対象トランザクション
-		//対象トランザクションの署名テキスト
-
-//		var txHash = JSON.parse(data).data.hash;
 		txHttp.getTransaction(outputData.innerText)
 		.subscribe(x=>{
 
@@ -433,20 +431,16 @@ $("#modal_ok").click(function(){
 			});
 		});
 
-
-
 	}else if(currentTab == "tab_"){
 
 		const importAccount = qr.AccountQR.fromJSON(outputData.innerText,$("#pass").val());
 		alicePublicAccount = importAccount.account.publicAccount;
-		//exportAccount = new qr.AccountQR(importAccount,$("#pass").val(), nem.NetworkType.TEST_NET);
 		importAccount.toBase64()
 		.subscribe(x =>{
 			showAccountQR(x);
 		});
 		exportJSON = importAccount.toJSON();
 		delete importAccount;
-
 
 		accountHttp.getAccountInfo(alicePublicAccount.address)
 		.pipe(
@@ -472,11 +466,10 @@ function resultQR(data){
 
 	}else if(currentTab == "tab_verify"){
 
-
 		outputData.innerText = JSON.parse(data).data.hash;
 
-
 	}else if(currentTab == "tab_"){
+
 		outputData.innerText = data;
 	}
 }
@@ -487,7 +480,6 @@ $("#create").click(function(){
 
 	const alice = nem.Account.generateNewAccount(nem.NetworkType.TEST_NET);
 	alicePublicAccount = alice.publicAccount;
-	//exportAccount = new qr.AccountQR(alice,$("#pass").val(), nem.NetworkType.TEST_NET);
 	const importAccount = new qr.AccountQR(alice,$("#pass").val(),nem.NetworkType.TEST_NET);
 
 	importAccount.toBase64()
