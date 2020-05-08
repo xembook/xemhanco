@@ -177,6 +177,7 @@ listener.open().then(() => {
 
 var alicePublicAccount;
 var exportAccount;
+var exportJSON;
 var canvasElement;
 var canvas;
 var outputData;
@@ -258,15 +259,11 @@ function stopVideo(){
 	}
 }
 
-function showAccountQR(){
+function showAccountQR(x){
 
-	exportAccount.toBase64()
-	.subscribe(x =>{
-		$('#div1').collapse('hide');
-		$('#div2').collapse('show');
-		$('#hanco').attr('src',x);
-	});
-
+	$('#div1').collapse('hide');
+	$('#div2').collapse('show');
+	$('#hanco').attr('src',x);
 
 	listener
 	.confirmed(alicePublicAccount.address)
@@ -306,7 +303,7 @@ function signByHanco(confirmedAddress,divId){
 
 	// 入力ダイアログを表示 ＋ 入力内容を user に代入
 	const pass = window.prompt("パスフレーズを入力してください", "");
-	const importAccount = qr.AccountQR.fromJSON(exportAccount.toJSON(),pass);
+	const importAccount = qr.AccountQR.fromJSON(exportJSON,pass);
 	delete pass;
 	const signedTx = importAccount.account.sign(tx,GENERATION_HASH);
 	delete importAccount;
@@ -414,9 +411,14 @@ $("#modal_ok").click(function(){
 
 		const importAccount = qr.AccountQR.fromJSON(outputData.innerText,$("#pass").val());
 		alicePublicAccount = importAccount.account.publicAccount;
-		exportAccount = new qr.AccountQR(importAccount,$("#pass").val(), nem.NetworkType.TEST_NET);
+		//exportAccount = new qr.AccountQR(importAccount,$("#pass").val(), nem.NetworkType.TEST_NET);
+		importAccount.toBase64()
+		.subscribe(x =>{
+			showAccountQR(x);
+		});
+		exportJSON = importAccount.toJSON();
 		delete importAccount;
-		showAccountQR();
+
 
 		accountHttp.getAccountInfo(alicePublicAccount.address)
 		.pipe(
@@ -438,10 +440,10 @@ function resultQR(data){
 
 	if(currentTab == "tab_confirm"){
 
-		outputData.innerText = JSON.parse(data).data.publicKey;		
+		outputData.innerText = JSON.parse(data).data.publicKey;
 
 	}else if(currentTab == "tab_verify"){
-	
+
 		//トランザクション承認
 		//署名者の口座ID
 		//申請者の口座ID
@@ -475,9 +477,21 @@ $("#create").click(function(){
 
 	const alice = nem.Account.generateNewAccount(nem.NetworkType.TEST_NET);
 	alicePublicAccount = alice.publicAccount;
-	exportAccount = new qr.AccountQR(alice,$("#pass").val(), nem.NetworkType.TEST_NET);
+	//exportAccount = new qr.AccountQR(alice,$("#pass").val(), nem.NetworkType.TEST_NET);
+	const importAccount = new qr.AccountQR(alice,$("#pass").val(),nem.NetworkType.TEST_NET);
+
+	var importAccount2 = qr.AccountQR.fromJSON(importAccount.toJSON(),$("#pass").val());
+
+
+	importAccount.toBase64()
+	.subscribe(x =>{
+		showAccountQR(x);
+	});
+
+	exportJSON = importAccount.toJSON();
 	delete alice;
-	showAccountQR();
+	delete importAccount;
+	//showAccountQR();
 });
 
 //復元
