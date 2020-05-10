@@ -435,20 +435,33 @@ $("#modal_ok").click(function(){
 
 			$('#div_text_confirm').modal('hide');
 		}else{
+
 			$('#div_text_confirm').modal('show');
 		}
 
 	}else if(currentTab == "tab_verify"){ //検証
 
+		(async() => {
+			const tx = await txHttp.getTransaction(outputData.innerText).toPromise();
+			const bh = await blockHttp.getBlockByHeight(tx.transactionInfo.height).toPromise();
+
+			$('#confirmed_verify ul')
+			.append('<li><a target="_blank" href="' + EXPLORER + '/transaction/' + tx.transactionInfo.hash + '">エクスプローラーで確認</a></li>')
+			.append('<li><b>口座ID:</b> <span>' 　   + tx.signer.publicKey     + '</span></li>')
+			.append('<li><b>TX hash:</b> <span>'    + tx.transactionInfo.hash + '</span></li>')
+			.append('<li><b>署名テキスト:</b> <span>' + tx.message.payload      + '</span></li>')
+			.append('<li><b>タイムスタンプ:</b> <span>' + dispTimeStamp(bh.timestamp.compact()  + SYMBOL_EPOCH * 1000) + '</span></li>');
+		})();
+/*
 		$('#outputData_verify').text(outputData.innerText);
 		txHttp.getTransaction(outputData.innerText)
-		.subscribe(x=>{
+		.subscribe(x =>{
 
 			$('#confirmed_verify ul')
 			.append('<li><a target="_blank" href="' + EXPLORER + '/transaction/' + x.transactionInfo.hash + '">エクスプローラーで確認</a></li>')
-			.append('<li><b>口座ID:</b> <span>' + x.signer.publicKey + '</span></li>')
-			.append('<li><b>TX hash:</b> <span>' + x.transactionInfo.hash + '</span></li>')
-			.append('<li><b>署名テキスト:</b> <span>' + x.message.payload + '</span></li>')
+			.append('<li><b>口座ID:</b> <span>' 　   + x.signer.publicKey     + '</span></li>')
+			.append('<li><b>TX hash:</b> <span>'    + x.transactionInfo.hash + '</span></li>')
+			.append('<li><b>署名テキスト:</b> <span>' + x.message.payload      + '</span></li>')
 
 			blockHttp.getBlockByHeight(x.transactionInfo.height).subscribe(b=>{
 
@@ -456,18 +469,25 @@ $("#modal_ok").click(function(){
 				.append('<li><b>タイムスタンプ:</b> <span>' + dispTimeStamp(b.timestamp.compact()  + SYMBOL_EPOCH * 1000) + '</span></li>');
 			});
 		});
-
+*/
 	}else if(currentTab == "tab_"){ //復元
 
-		const aliceQR = qr.AccountQR.fromJSON(outputData.innerText,$("#pass").val());
-		alicePublicAccount = aliceQR.account.publicAccount;
-		aliceQR.toBase64()
-		.subscribe(x =>{
-			showAccountQR(x);
-		});
-		aliceJSON = aliceQR.toJSON();
-		delete aliceQR;
-
+		try{
+			const aliceQR = qr.AccountQR.fromJSON(outputData.innerText,$("#pass").val());
+			alicePublicAccount = aliceQR.account.publicAccount;
+			aliceQR.toBase64()
+			.subscribe(x =>{
+				showAccountQR(x);
+			});
+			aliceJSON = aliceQR.toJSON();
+			delete aliceQR;
+		}
+		catch (e) {
+			if(e.toString().indexOf("Could not parse encrypted account information.") > 0){
+				alert("NEMはんこの復元に失敗しました")
+			}
+			console.log(e);
+		}
 		accountHttp.getAccountInfo(alicePublicAccount.address)
 		.pipe(
 			op.mergeMap(_=>_.mosaics),
