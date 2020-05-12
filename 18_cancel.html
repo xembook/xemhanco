@@ -345,6 +345,52 @@ function signByHanco(confirmedAddress,divId,message){
 	console.log(NODE + "/transaction/" + signedTx.hash + "/status");
 }
 
+
+function cancelHanco(){
+
+
+	const tx = AccountMetadataTransaction.create(
+	    nem.Deadline.create(),
+	    alicePublicAccount.publicKey,
+	    key,
+	    value.length,
+	    value,
+	    nem.NetworkType.TEST_NET,
+	);
+
+	const tx = nem.TransferTransaction.create(
+		nem.Deadline.create(),
+		confirmedAddress,[],
+		nem.PlainMessage.create(message),
+		nem.NetworkType.TEST_NET,
+		nem.UInt64.fromUint(100000)
+	);
+
+	// 入力ダイアログを表示 ＋ 入力内容を user に代入
+	const pass = window.prompt("パスフレーズを入力してください", "");
+	const aliceQR = qr.AccountQR.fromJSON(aliceJSON,pass);
+	delete pass;
+	const signedTx = aliceQR.account.sign(tx,GENERATION_HASH);
+	delete aliceQR;
+	const txHttp = new nem.TransactionHttp(NODE);
+	txHttp.announce(signedTx)
+	.subscribe(_ => {
+		console.log(_);
+
+		const confirmListener = listener
+		.confirmed(alicePublicAccount.address)
+		.pipe(
+			op.filter((tx) => tx.transactionInfo !== undefined && tx.transactionInfo.hash === signedTx.hash),
+		)
+		.subscribe(function(_){
+
+		},err => console.error(err));
+	}, err => console.error(err));
+	console.log(NODE + "/transaction/" + signedTx.hash + "/status");
+}
+
+
+
 function setFileHash(divId) {
 
 	const fileList = document.getElementById("file_" + divId).files;
