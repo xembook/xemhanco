@@ -39,9 +39,10 @@
 			<!-- 口座 -->
 			<div id="tab_contact" class="tab-pane active">
 				<div class="card" style="width: 18rem;">
+
 					<img class="card-img-top" id="contact" alt="カードの画像">
 					<div class="card-body">
-						<h5 class="card-title">口座ID</h5>
+						<h5 class="card-title">口座ID　<span id="disabled_contact" class="collapse badge badge-danger" >無効</span></h5>
 						<p class="card-text" id="text_contact"></p>
 						<a id="download_contact" href="javascript:void(0);" download="contact_qr.png" class="btn btn-primary">ダウンロード</a>
 						<a id="cancel_contact" href="javascript:void(0);" class="btn btn-primary">無効化</a>
@@ -299,6 +300,20 @@ function showAccountQR(x){
 		$('#contact').attr('src',x);
 		$('#text_contact').text(alicePublicAccount.publicKey);
 	});
+
+	const metaHttp = new nem.MetadataHttp(NODE);
+
+	const key = nem.KeyGenerator.generateUInt64Key(alicePublicAccount.publicKey);
+
+	metaHttp.getAccountMetadataByKeyAndSender(alicePublicAccount.address,key.toHex(),alicePublicAccount.publicKey)
+	.pipe(
+		op.filter(_=> _.metadataEntry.value == "disabled")
+	)
+	.subscribe(_=>{
+		$('#disabled_contact').collapse('show');
+	})
+	
+	
 }
 
 //押印
@@ -348,34 +363,39 @@ function signByHanco(confirmedAddress,divId,message){
 
 function cancelHanco(){
 
+	const metaHttp = new nem.MetadataHttp(NODE);
+	const metaService = new nem.MetadataTransactionService(metaHttp);
+	const key = nem.KeyGenerator.generateUInt64Key(alicePublicAccount.publicKey);
+	const value = 'disabled';
+	
+	(async() => {
+		const metaTx = await metaService.createMetadataTransaction(
+			nem.Deadline.create(),
+			nem.NetworkType.TEST_NET,
+			nem.MetadataType.Account,
+			alicePublicAccount,//target
+			key,
+			value,
+			alicePublicAccount // sender
+		).toPromise();
+		
+		const aggregateTx = nem.AggregateTransaction.createComplete(
+			nem.Deadline.create(),
+			[metaTx.toAggregate(alicePublicAccount)],
+			nem.NetworkType.TEST_NET,
+			[],
+			nem.UInt64.fromUint(100000)
+		);
 
-	const tx = AccountMetadataTransaction.create(
-	    nem.Deadline.create(),
-	    alicePublicAccount.publicKey,
-	    key,
-	    value.length,
-	    value,
-	    nem.NetworkType.TEST_NET,
-	);
+		// 入力ダイアログを表示 ＋ 入力内容を user に代入
+		const aliceQR = qr.AccountQR.fromJSON(aliceJSON,
+			window.prompt("パスフレーズを入力してください", "")
+		);
+		const signedTx = aliceQR.account.sign(aggregateTx,GENERATION_HASH);
+		delete aliceQR;
 
-	const tx = nem.TransferTransaction.create(
-		nem.Deadline.create(),
-		confirmedAddress,[],
-		nem.PlainMessage.create(message),
-		nem.NetworkType.TEST_NET,
-		nem.UInt64.fromUint(100000)
-	);
-
-	// 入力ダイアログを表示 ＋ 入力内容を user に代入
-	const pass = window.prompt("パスフレーズを入力してください", "");
-	const aliceQR = qr.AccountQR.fromJSON(aliceJSON,pass);
-	delete pass;
-	const signedTx = aliceQR.account.sign(tx,GENERATION_HASH);
-	delete aliceQR;
-	const txHttp = new nem.TransactionHttp(NODE);
-	txHttp.announce(signedTx)
-	.subscribe(_ => {
-		console.log(_);
+		const res = await txHttp.announce(signedTx).toPromise();
+		console.log(res);
 
 		const confirmListener = listener
 		.confirmed(alicePublicAccount.address)
@@ -383,13 +403,55 @@ function cancelHanco(){
 			op.filter((tx) => tx.transactionInfo !== undefined && tx.transactionInfo.hash === signedTx.hash),
 		)
 		.subscribe(function(_){
+			$('#disabled_contact').collapse('show');
 
 		},err => console.error(err));
-	}, err => console.error(err));
-	console.log(NODE + "/transaction/" + signedTx.hash + "/status");
+
+		console.log(NODE + "/transaction/" + signedTx.hash + "/status");
+
+	})();
 }
 
+function cancelSign(hash){
 
+	const metaHttp = new nem.MetadataHttp(NODE);
+	const metaService = new nem.MetadataTransactionService(metaHttp);
+	const key = nem.KeyGenerator.generateUInt64Key(hash);
+	const value = 'disabled';
+	
+	(async() => {
+		const metaTx = await metaService.createMetadataTransaction(
+			nem.Deadline.create(),
+			nem.NetworkType.TEST_NET,
+			nem.MetadataType.Account,
+			alicePublicAccount,//target
+			key,
+			value,
+			alicePublicAccount // sender
+		).toPromise();
+		
+		const aggregateTx = nem.AggregateTransaction.createComplete(
+			nem.Deadline.create(),
+			[metaTx.toAggregate(alicePublicAccount)],
+			nem.NetworkType.TEST_NET,
+			[],
+			nem.UInt64.fromUint(100000)
+		);
+
+		// 入力ダイアログを表示 ＋ 入力内容を user に代入
+		const aliceQR = qr.AccountQR.fromJSON(aliceJSON,
+			window.prompt("パスフレーズを入力してください", "")
+		);
+		const signedTx = aliceQR.account.sign(aggregateTx,GENERATION_HASH);
+		delete aliceQR;
+
+		const res = await txHttp.announce(signedTx).toPromise();
+		console.log(res);
+
+		console.log(NODE + "/transaction/" + signedTx.hash + "/status");
+
+	})();
+}
 
 function setFileHash(divId) {
 
@@ -504,10 +566,19 @@ $("#modal_ok").click(function(){
 		}
 
 	}else if(currentTab == "tab_verify"){ //検証
+		const metaHttp = new nem.MetadataHttp(NODE);
 
 		(async() => {
 			const tx = await txHttp.getTransaction(outputData.innerText).toPromise();
 			const bh = await blockHttp.getBlockByHeight(tx.transactionInfo.height).toPromise();
+
+			const key = nem.KeyGenerator.generateUInt64Key(tx.transactionInfo.hash);
+
+			const mt = await metaHttp.getAccountMetadataByKeyAndSender(tx.signer.address,key.toHex(),tx.signer.publicKey).toPromise();
+			if(mt.metadataEntry.value === "disabled"){
+				$('#confirmed_verify ul')
+				.append('<li><span class="badge badge-danger" >無効</span></li>');
+			}
 
 			$('#confirmed_verify ul')
 			.append('<li><a target="_blank" href="' + EXPLORER + '/transaction/' + tx.transactionInfo.hash + '">エクスプローラーで確認</a></li>')
@@ -589,12 +660,19 @@ $("#create").click(function(){
 
 $("#cancel_contact").click(function(){ //無効化：はんこ
 
-
+	cancelHanco();
 });
 
 $("#cancel_confirm").click(function(){ //無効化：承認
 
+	const jsonData = JSON.parse($('#outputData_confirm').text()).data;
+	if(jsonData.name == 'xemhanco.tx.1'){
 
+
+		cancelSign(jsonData.hash);
+//		console.log(jsonData.hash);
+
+	}
 });
 
 //復元
