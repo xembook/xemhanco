@@ -68,11 +68,8 @@
 
 			<!-- 承認 -->
 			<div id="tab_confirm" class="tab-pane">
-
 				<div><b>申請者情報:</b> <span id="outputData_confirm" class="text-break"></span></div>
-
 				<div class="collapse" id="div_text_confirm">
-
 					<label><b>承認テキスト:</b></label>
 					<input type="text" id="text_confirm" class="form-control">
 					<div class="input-group">
@@ -88,7 +85,6 @@
 				<div class="collapse" id="div_cancel_confirm">
 					<button type="button" id="cancel_confirm" class="btn btn-primary">キャンセル</button>
 				</div>
-
 				<div id="confirmed_confirm"><ul></ul></div>
 			</div>
 
@@ -96,6 +92,7 @@
 			<div id="tab_verify" class="tab-pane">
 				<div><b>承認者署名ID:</b> <span id="outputData_verify" class="text-break"></span></div>
 				<div id="confirmed_verify"><ul></ul></div>
+				<div><button type="button" id="button_auth" class="btn btn-primary">認証</button></div>
 
 <!--				<div><button type="button" id="button_verify" class="btn btn-primary">認証</button></div>
 				<div id="confirmed_verify"><ul></ul></div>
@@ -302,9 +299,7 @@ function showAccountQR(x){
 	});
 
 	const metaHttp = new nem.MetadataHttp(NODE);
-
 	const key = nem.KeyGenerator.generateUInt64Key(alicePublicAccount.publicKey);
-
 	metaHttp.getAccountMetadataByKeyAndSender(alicePublicAccount.address,key.toHex(),alicePublicAccount.publicKey)
 	.pipe(
 		op.filter(_=> _.metadataEntry.value == "disabled")
@@ -358,7 +353,7 @@ function signByHanco(confirmedAddress,divId,message){
 	console.log(NODE + "/transaction/" + signedTx.hash + "/status");
 }
 
-async function  addMeta(callback){
+async function addMeta(callback){
 	const metaHttp = new nem.MetadataHttp(NODE);
 	const metaService = new nem.MetadataTransactionService(metaHttp);
 	const key = nem.KeyGenerator.generateUInt64Key(alicePublicAccount.publicKey);
@@ -397,6 +392,51 @@ async function  addMeta(callback){
 		console.log(NODE + "/transaction/" + signedTx.hash + "/status");
 	})();
 }
+
+async function addAuth(callback){
+
+	const jsonData = JSON.parse($('#outputData_verify').text()).data;
+
+	const metaHttp = new nem.MetadataHttp(NODE);
+	const metaService = new nem.MetadataTransactionService(metaHttp);
+	const key = nem.KeyGenerator.generateUInt64Key(alicePublicAccount.publicKey);
+	const value = 'authenticated';
+
+	(async() => {
+		const metaTx = await metaService.createMetadataTransaction(
+			nem.Deadline.create(),
+			nem.NetworkType.TEST_NET,
+			nem.MetadataType.Account,
+			alicePublicAccount,//target
+			key,
+			value,
+			alicePublicAccount // sender
+		).toPromise();
+
+		const aggregateTx = nem.AggregateTransaction.createComplete(
+			nem.Deadline.create(),
+			[metaTx.toAggregate(alicePublicAccount)],
+			nem.NetworkType.TEST_NET,
+			[],
+			nem.UInt64.fromUint(100000)
+		);
+
+		// 入力ダイアログを表示 ＋ 入力内容を user に代入
+		const aliceQR = qr.AccountQR.fromJSON(aliceJSON,
+			window.prompt("パスフレーズを入力してください", "")
+		);
+		const signedTx = aliceQR.account.sign(aggregateTx,GENERATION_HASH);
+		delete aliceQR;
+
+		const res = await txHttp.announce(signedTx).toPromise();
+		console.log(res);
+		callback(signedTx);
+
+		console.log(NODE + "/transaction/" + signedTx.hash + "/status");
+	})();
+}
+
+
 
 //はんこキャンセル
 function cancelHanco(){
@@ -538,11 +578,19 @@ $("#modal_ok").click(function(){
 			const bh = await blockHttp.getBlockByHeight(tx.transactionInfo.height).toPromise();
 
 			const key = nem.KeyGenerator.generateUInt64Key(tx.transactionInfo.hash);
-			const mt = await metaHttp.getAccountMetadataByKeyAndSender(tx.signer.address,key.toHex(),tx.signer.publicKey).toPromise();
-			if(mt.metadataEntry.value === "disabled"){
-				$('#confirmed_verify ul')
-				.append('<li><span class="badge badge-danger" >無効</span></li>');
-			}
+			const mt = await metaHttp.getAccountMetadataByKeyAndSender(tx.signer.address,key.toHex(),tx.signer.publicKey)
+			.toPromise().then(_=>{
+				console.log(_);
+				if(mt.metadataEntry.value === "disabled"){
+					$('#confirmed_verify ul')
+					.append('<li><span class="badge badge-danger" >無効</span></li>');
+				}
+			})
+			.catch(err=>{
+
+				console.error(err);
+			})
+
 
 			$('#confirmed_verify ul')
 			.append('<li><a target="_blank" href="' + EXPLORER + '/transaction/' + tx.transactionInfo.hash + '">エクスプローラーで確認</a></li>')
@@ -681,6 +729,11 @@ $("#faucet").click(function(){
 	window.open(FAUCET + "/?recipient=" + alicePublicAccount.address.plain() + "&amount=1","_blank");
 	return false;
 });
+
+$("#button_auth").click(function(){
+	return false;
+});
+
 
 $('#div1').collapse('show');
 
