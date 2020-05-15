@@ -182,7 +182,7 @@ const GENERATION_HASH = "ACECD90E7B248E012803228ADB4424F0D966D24149B72E58987D2BF
 const accountHttp = new nem.AccountHttp(NODE);
 const txHttp  = new nem.TransactionHttp(NODE);
 const blockHttp = new nem.BlockHttp(NODE);
-const receiptHttp = new nem.ReceiptHttp(NODE);	
+const receiptHttp = new nem.ReceiptHttp(NODE);
 const metaHttp = new nem.MetadataHttp(NODE);
 const metaService = new nem.MetadataTransactionService(metaHttp);
 const transactionService = new nem.TransactionService(txHttp, receiptHttp);
@@ -193,7 +193,7 @@ listener.open().then(() => {
 	setInterval(function(){listener.newBlock()}, 30000);
 
 
-	
+
 });
 
 //グローバル変数
@@ -302,6 +302,50 @@ function showAccountQR(x){
 		err => console.error(err)
 	);
 
+	accountHttp.getAccountPartialTransactions(alicePublicAccount.address)
+    .pipe(
+		op.delay(2000),
+        op.mergeMap(_ => {
+            return _;
+        }),
+        op.filter((_) => {
+            return !_.signedByAccount(alicePublicAccount)
+        }),
+        op.map(_ => {
+			const aliceQR = qr.AccountQR.fromJSON(aliceJSON,
+				window.prompt("認証要求があります。パスフレーズをもう一度入力してください", "")
+			);
+            return aliceQR.account.signCosignatureTransaction(nem.CosignatureTransaction.create(_));
+        }),
+        op.mergeMap(_ => {
+//            exhash = _.parentHash;
+            return rxjs.of({
+				ignored:txHttp.announceAggregateBondedCosignature(_),
+				hash:_.parentHash
+			});
+        })
+    )
+    .subscribe(_ => {
+
+		listener
+	    .confirmed(alicePublicAccount.address)
+	    .pipe(
+	        op.filter(tx => tx.transactionInfo !== undefined && tx.transactionInfo.hash === _.hash),
+	    )
+	    .subscribe(
+	        function(x){
+				alert("認証完了しました");
+	        },
+	        err => console.error(err)
+	    );
+    },
+        err => console.error(err)
+    );
+
+
+
+
+
 	const contactQR = new qr.ContactQR("xemhanco.contact.1",alicePublicAccount);
 	contactQR.toBase64()
 	.subscribe(x=>{
@@ -405,7 +449,7 @@ async function addMeta(callback){
 async function addAuth(callback){
 
 	const targetPublicAccount = nem.PublicAccount.createFromPublicKey($('#confirmed_verify_publicKey').text(),nem.NetworkType.TEST_NET)
-	
+
 	const metaHttp = new nem.MetadataHttp(NODE);
 	const metaService = new nem.MetadataTransactionService(metaHttp);
 	const key = nem.KeyGenerator.generateUInt64Key(alicePublicAccount.publicKey);
@@ -470,23 +514,30 @@ async function addAuth(callback){
 				listener),
 		),
 	).subscribe(
-		(ignored) => console.log('Transaction confirmed'),
+		aggTx => {
+
+			listener
+		    .confirmed(alicePublicAccount.address)
+		    .pipe(
+		        op.filter(tx => {
+					return tx.transactionInfo !== undefined && tx.transactionInfo.hash === aggTx.transactionInfo.hash
+				}),
+		    )
+		    .subscribe(
+		        function(x){
+					alert("認証完了しました");
+		        },
+		        err => console.error(err)
+		    );
+
+			console.log('Transaction confirmed');
+		},
 		(err) => console.log(err),
 //		() => listener.close()
 	);
 
-	listener
-	.aggregateBondedAdded(alicePublicAccount.address)
-	.pipe(
-		op.filter(_ => !_.signedByAccount(alicePublicAccount)),
-	)
-	.subscribe(_ =>{
 
-		console.log(_);
-	}, err => console.error(err));
 }
-
-
 
 //はんこキャンセル
 function cancelHanco(){
