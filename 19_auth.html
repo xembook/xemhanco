@@ -524,8 +524,15 @@ async function addAuth(callback){
 				}),
 		    )
 		    .subscribe(
-		        function(x){
+		        function(tx){
 					alert("認証完了しました");
+
+					(async() => {
+						const bh = await blockHttp.getBlockByHeight(tx.transactionInfo.height).toPromise();
+
+						$('#confirmed_verify ul')
+						.append('<li><b>認証日時:</b> <span>' + dispTimeStamp(bh.timestamp.compact()	+ SYMBOL_EPOCH * 1000) + '</span></li>');
+					})();
 		        },
 		        err => console.error(err)
 		    );
