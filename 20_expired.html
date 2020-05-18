@@ -291,7 +291,7 @@ function showAccountQR(x){
 		err => console.error(err)
 	);
 
-	var subscribeBonded = function(observer){
+	var bondedSubscribe = function(observer){
 		observer
 		.pipe(
 			op.filter(_ => !_.signedByAccount(alicePublicAccount)),
@@ -327,15 +327,19 @@ function showAccountQR(x){
 	.pipe(
 		op.filter(_ => !_.signedByAccount(alicePublicAccount.address))
 	)
+	
 
 	const bondedHttp = accountHttp.getAccountPartialTransactions(alicePublicAccount.address)
 	.pipe(
 		op.delay(2000),
 		op.mergeMap(_ => _)
 	);
+
+	bondedListener(_=>bondedSubscribe(_));
+	bondedHttp(_=>bondedSubscribe(_));
 	
-	subscribeBonded(bondedListener);
-	subscribeBonded(bondedHttp);
+//	subscribeBonded(bondedListener);
+//	subscribeBonded(bondedHttp);
 
 /*
 
