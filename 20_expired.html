@@ -294,10 +294,7 @@ function showAccountQR(x){
 	var subscribeBonded = function(observer){
 		observer
 		.pipe(
-			op.filter(_ => {
-				console.log(_);
-				return !_.signedByAccount(alicePublicAccount);
-			}),
+			op.filter(_ => !_.signedByAccount(alicePublicAccount)),
 			op.map(_ => {
 				const aliceQR = qr.AccountQR.fromJSON(aliceJSON,
 					window.prompt("認証要求があります。パスフレーズをもう一度入力してください", "")
@@ -326,22 +323,17 @@ function showAccountQR(x){
 		}, err => console.error(err));
 	}
 
-	const bondedListener = function(){
-		return listener.aggregateBondedAdded(alicePublicAccount.address)
-	};
-
-	const bondedHttp = function(){
-		return accountHttp.getAccountPartialTransactions(alicePublicAccount.address)
-		.pipe(
-			op.delay(2000),
-			op.mergeMap(_ => _)
-		);
-	};	
-//	subscribeBonded(bondedListener);
-//	subscribeBonded(bondedHttp);
+	const bondedListener = listener.aggregateBondedAdded(alicePublicAccount.address)
 	
-	bondedListener(_=>subscribeBonded(_));
-	bondedHttp(_=>subscribeBonded(_));
+
+	const bondedHttp = accountHttp.getAccountPartialTransactions(alicePublicAccount.address)
+	.pipe(
+		op.delay(2000),
+		op.mergeMap(_ => _)
+	);
+	
+	subscribeBonded(bondedListener);
+//	subscribeBonded(bondedHttp);
 
 /*
 
