@@ -132,7 +132,6 @@
 	</div><!-- /.modal-dialog -->
 </div><!-- /.modal -->
 
-
 <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/3.1.9-1/crypto-js.min.js"></script>
 <script
 	src="https://code.jquery.com/jquery-3.3.1.slim.min.js"
@@ -150,7 +149,6 @@
 <script src="symbol-qr-library-0.9.1.js"></script>
 <script src="symbol-sdk-0.18.0.js"></script>
 <script src="xembook-tools.js"></script>
-
 <script>$(function() {
 
 const nem  = require("/node_modules/symbol-sdk");
@@ -186,7 +184,6 @@ const receiptHttp = new nem.ReceiptHttp(NODE);
 const metaHttp = new nem.MetadataHttp(NODE);
 const metaService = new nem.MetadataTransactionService(metaHttp);
 const transactionService = new nem.TransactionService(txHttp, receiptHttp);
-
 const wsEndpoint = NODE.replace('http', 'ws');
 const listener = new nem.Listener(wsEndpoint, WebSocket);
 listener.open().then(() => {
@@ -200,7 +197,6 @@ var canvasElement;
 var canvas;
 var outputData;
 var currentTab;
-
 var isMovieScanning = false;
 var video = document.createElement("video");
 
@@ -215,7 +211,6 @@ function drawLine(begin, end, color) {
 
 function tick() {
 	if(!isMovieScanning){return;}
-
 	if (video.readyState === video.HAVE_ENOUGH_DATA) {
 		canvasElement.hidden = false;
 		canvasElement.width  = 450;
@@ -238,9 +233,6 @@ function getCodeInfo(src){
 		drawLine(code.location.bottomRightCorner	, code.location.bottomLeftCorner	,"#FF3B58");
 		drawLine(code.location.bottomLeftCorner		, code.location.topLeftCorner		,"#FF3B58");
 		resultQR(code.data);
-
-	} else {
-//		outputData.parentElement.hidden = true;
 	}
 }
 
@@ -248,7 +240,6 @@ function startVideo(divId){
 
 	currentTab = "tab_" + divId;
 	isMovieScanning = true;
-
 	canvasElement = document.getElementById("canvas");
 	canvas		  = canvasElement.getContext("2d");
 	outputData	  = document.getElementById("outputData");
@@ -256,7 +247,7 @@ function startVideo(divId){
 	navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } }).then(function(stream) {
 		video.srcObject = stream;
 		window.localStream = stream;
-		video.setAttribute("playsinline", true); // required to tell iOS safari we don't want fullscreen
+		video.setAttribute("playsinline", true);
 		video.play();
 		requestAnimationFrame(tick);
 	});
@@ -272,10 +263,6 @@ function stopVideo(){
 
 function showAccountQR(x){
 
-	$('#div1').collapse('hide');
-	$('#div2').collapse('show');
-	$('#hanco').attr('src',x);
-
 	listener.confirmed(alicePublicAccount.address)
 	.pipe(
 		op.delay(1000),
@@ -283,13 +270,10 @@ function showAccountQR(x){
 		op.mergeMap(_=>_.mosaics),
 		op.filter(_ => _.id.toHex() === CURRENCY)
 	)
-	.subscribe(
-		function(_){
-			$("#amount").text(dispAmount(_.amount.toString(),6) + " XYM");
-			$('#div3').collapse('show');
-		},
-		err => console.error(err)
-	);
+	.subscribe(_=>{
+		$("#amount").text(dispAmount(_.amount.toString(),6) + " XYM");
+		$('#div3').collapse('show');
+	},err => console.error(err));
 
 	var bondedSubscribe = function(observer){
 		observer.pipe(
@@ -306,7 +290,6 @@ function showAccountQR(x){
 					hash:_.parentHash
 				});
 			})
-				
 		)
 		.subscribe(_ =>{
 			listener.confirmed(alicePublicAccount.address)
@@ -314,9 +297,7 @@ function showAccountQR(x){
 				op.filter(tx => tx.transactionInfo !== undefined && tx.transactionInfo.hash === _.hash),
 			)
 			.subscribe(
-				function(x){
-					alert("認証完了しました");
-				},
+				x => alert("認証完了しました"),
 				err => console.error(err)
 			);
 		}, err => console.error(err));
@@ -328,13 +309,12 @@ function showAccountQR(x){
 		op.delay(2000),
 		op.mergeMap(_ => _)
 	);
-	
+
 	bondedSubscribe(bondedListener);
 	bondedSubscribe(bondedHttp);
 
 	const contactQR = new qr.ContactQR("xemhanco.contact.1",alicePublicAccount);
-	contactQR.toBase64()
-	.subscribe(x=>{
+	contactQR.toBase64().subscribe(x => {
 		$('#contact').attr('src',x);
 		$('#text_contact').text(alicePublicAccount.publicKey);
 	});
@@ -361,9 +341,7 @@ function signByHanco(confirmedAddress,divId,message){
 	);
 
 	// 入力ダイアログを表示 ＋ 入力内容を user に代入
-	const pass = window.prompt("パスフレーズを入力してください", "");
-	const aliceQR = qr.AccountQR.fromJSON(aliceJSON,pass);
-	delete pass;
+	const aliceQR = qr.AccountQR.fromJSON(aliceJSON,window.prompt("パスフレーズを入力してください", ""));
 	const signedTx = aliceQR.account.sign(tx,GENERATION_HASH);
 	delete aliceQR;
 	const txHttp = new nem.TransactionHttp(NODE);
@@ -403,8 +381,7 @@ async function addMeta(callback){
 			nem.NetworkType.TEST_NET,
 			nem.MetadataType.Account,
 			alicePublicAccount,//target
-			key,
-			value,
+			key,value,
 			alicePublicAccount // sender
 		).toPromise();
 
@@ -417,14 +394,13 @@ async function addMeta(callback){
 
 		// 入力ダイアログを表示 ＋ 入力内容を user に代入
 		const aliceQR = qr.AccountQR.fromJSON(aliceJSON,
-			window.prompt("パスフレーズを入力してください", "")
+			window.prompt("パスフレーズを入力してください", "");
 		);
 		const signedTx = aliceQR.account.sign(aggregateTx,GENERATION_HASH);
 		delete aliceQR;
 
 		const res = await txHttp.announce(signedTx).toPromise();
 		callback(signedTx);
-
 		console.log(NODE + "/transaction/" + signedTx.hash + "/status");
 	})();
 }
@@ -439,8 +415,7 @@ async function addAuth(){
 		nem.NetworkType.TEST_NET,
 		nem.MetadataType.Account,
 		targetPublicAccount,//target
-		key,
-		value,
+		key,value,
 		alicePublicAccount // sender
 	);
 
@@ -507,35 +482,29 @@ async function addAuth(){
 					signedAggregateHashLock.aggregate,
 					listener),
 			),
-		).subscribe(
-			aggTx => {
+		).subscribe(aggTx => {
 
-				bondedListener.confirmed(alicePublicAccount.address)
-				.pipe(
-					op.filter(tx => {
-						return tx.transactionInfo !== undefined && tx.transactionInfo.hash === aggTx.transactionInfo.hash
-					}),
-				)
-				.subscribe(tx => {
-					alert("認証完了しました");
-
-					(async() => {
-						const bh = await blockHttp.getBlockByHeight(tx.transactionInfo.height).toPromise();
-
-						$('#confirmed_verify ul')
-						.append('<li><b>認証日時:</b> <span>' + dispTimeStamp(bh.timestamp.compact() + SYMBOL_EPOCH * 1000) + '</span></li>');
-					})();
-				},err => console.error(err));
-				console.log('Transaction confirmed');
-			},
-			(err) => console.log(err),
-			() => bondedListener.close()
-		);
+			bondedListener.confirmed(alicePublicAccount.address)
+			.pipe(
+				op.filter(tx => tx.transactionInfo !== undefined && tx.transactionInfo.hash === aggTx.transactionInfo.hash)
+			)
+			.subscribe(tx => {
+				alert("認証完了しました");
+				(async() => {
+					const bh = await blockHttp.getBlockByHeight(tx.transactionInfo.height).toPromise();
+					$('#confirmed_verify ul')
+					.append('<li><b>認証日時:</b> <span>' + dispTimeStamp(bh.timestamp.compact() + SYMBOL_EPOCH * 1000) + '</span></li>');
+				})();
+			},err => console.error(err));
+			console.log('Transaction confirmed');
+		},
+		(err) => console.log(err),
+		() => bondedListener.close());
 	});
 }
 
-//はんこキャンセル
-function cancelHanco(){
+function cancelSign(hash){addMeta(_ => {})} //トランザクションキャンセル
+function cancelHanco(){ ////はんこキャンセル
 	addMeta(signedTx => {
 		const confirmListener = listener
 		.confirmed(alicePublicAccount.address)
@@ -547,11 +516,6 @@ function cancelHanco(){
 
 		},err => console.error(err));
 	});
-}
-
-//トランザクションキャンセル
-function cancelSign(hash){
-	addMeta(_ => {});
 }
 
 function setFileHash(divId) {
@@ -587,7 +551,6 @@ function scanFileImage(){
 				const img = new Image();
 				img.src = e.target.result;
 				img.onload = function() {
-
 					canvasElement.height = img.width;
 					canvasElement.width	= img.height;
 					getCodeInfo(img);
@@ -640,21 +603,13 @@ $("#modal_ok").click(function(){
 		if(jsonData.name == 'xemhanco.tx.1'){
 
 			$('#div_text_confirm').collapse('hide');
-			//キャンセルボタン表示
 
-			(async() => {
-				const tx = await txHttp.getTransaction(jsonData.hash).toPromise();
-				console.log(tx);
-				if(tx.signer.publicKey == alicePublicAccount.publicKey){
-					console.log("署名者が自分：");
-					$('#div_cancel_confirm').collapse('show');
-				}else{
-					console.log("署名者が他人：" + tx.signer.publicKey);
-				}
-			})();
-
+			txHttp.getTransaction(jsonData.hash)
+			.pipe(
+				op.filter(tx => tx.signer.publicKey === alicePublicAccount.publicKey)
+			)
+			.subscribe(_ => $('#div_cancel_confirm').collapse('show'));
 		}else{
-
 			$('#div_text_confirm').collapse('show');
 		}
 
@@ -663,7 +618,6 @@ $("#modal_ok").click(function(){
 		(async() => {
 			const tx = await txHttp.getTransaction(outputData.innerText).toPromise();
 			const bh = await blockHttp.getBlockByHeight(tx.transactionInfo.height).toPromise();
-
 			const key = nem.KeyGenerator.generateUInt64Key(tx.transactionInfo.hash);
 			await metaHttp.getAccountMetadataByKeyAndSender(tx.signer.address,key.toHex(),tx.signer.publicKey)
 			.toPromise().then(mt=>{
@@ -673,10 +627,7 @@ $("#modal_ok").click(function(){
 					.append('<li><span class="badge badge-danger" >無効</span></li>');
 				}
 			})
-			.catch(err=>{
-
-				console.error(err);
-			})
+			.catch(err=>console.error(err));
 
 			$('#confirmed_verify ul')
 			.append('<li><a target="_blank" href="' + EXPLORER + '/transaction/' + tx.transactionInfo.hash + '">エクスプローラーで確認</a></li>')
@@ -691,12 +642,12 @@ $("#modal_ok").click(function(){
 		try{
 			const aliceQR = qr.AccountQR.fromJSON(outputData.innerText,$("#pass").val());
 			alicePublicAccount = aliceQR.account.publicAccount;
-			aliceQR.toBase64()
-			.subscribe(x =>{
-				showAccountQR(x);
-			});
+			aliceQR.toBase64().subscribe(x => showAccountQR(x));
 			aliceJSON = aliceQR.toJSON();
 			delete aliceQR;
+			$('#div1').collapse('hide');
+			$('#div2').collapse('show');
+			$('#hanco').attr('src',x);
 		}
 		catch (e) {
 			if(e.toString().indexOf("Could not parse encrypted account information.") > 0){
@@ -709,13 +660,10 @@ $("#modal_ok").click(function(){
 			op.mergeMap(_=>_.mosaics),
 			op.filter(_ => _.id.toHex() === CURRENCY)
 		)
-		.subscribe(
-			function(_){
-				$("#amount").text(dispAmount(_.amount.toString(),6) + " XYM");
-				$('#div3').collapse('show');
-			},
-			err => console.error(err)
-		);
+		.subscribe(_=>{
+			$("#amount").text(dispAmount(_.amount.toString(),6) + " XYM");
+			$('#div3').collapse('show');
+		},err => console.error(err));
 	}
 });
 
@@ -726,18 +674,14 @@ $("#create").click(function(){
 	const alice = nem.Account.generateNewAccount(nem.NetworkType.TEST_NET);
 	alicePublicAccount = alice.publicAccount;
 	const aliceQR = new qr.AccountQR(alice,$("#pass").val(),nem.NetworkType.TEST_NET);
-
-	aliceQR.toBase64()
-	.subscribe(x =>{
-		showAccountQR(x);
-	});
-
+	aliceQR.toBase64().subscribe(x =>showAccountQR(x));
 	aliceJSON = aliceQR.toJSON();
 	delete alice;
 	delete aliceQR;
-	//showAccountQR();
+	$('#div1').collapse('hide');
+	$('#div2').collapse('show');
+	$('#hanco').attr('src',x);
 });
-
 
 $("#cancel_contact").click(function(){ cancelHanco();}); //無効化：はんこ
 $("#cancel_confirm").click(function(){ //無効化：承認
@@ -765,7 +709,6 @@ $('#modal-qrscan').on('hide.bs.modal', function (e) {
 	outputData.innerText = "";
 })
 
-
 $('#image'		  ).change(function(e) {scanFileImage();});
 $('#file_selfsign').change(function(e) {setFileHash('selfsign')});
 $('#file_confirm' ).change(function(e) {setFileHash('confirm')});
@@ -775,7 +718,6 @@ $('#download_contact').click(function(e){
 	const contactQR = new qr.ContactQR("xemhanco.contact.1",alicePublicAccount);
 	contactQR.toBase64().subscribe(x=>{this.href = x});
 });
-
 
 $('#button_selfsign').click(function(e) {signByHanco(alicePublicAccount.address,"selfsign",$("#text_selfsign").val())});//自署：押印
 $('#button_confirm' ).click(function(e) { //承認：押印
@@ -788,12 +730,9 @@ $('#button_confirm' ).click(function(e) { //承認：押印
 
 	}else if(jsonData.name == 'xemhanco.tx.1'){
 
-		txHttp.getTransaction(jsonData.hash)
-		.subscribe(x=>{
-
+		txHttp.getTransaction(jsonData.hash).subscribe(x=>{
 			signByHanco(x.signer.address,"confirm",jsonData.hash)
 		});
-
 	}else{
 		alert("承認できないデータです")
 	}
@@ -804,11 +743,7 @@ $("#faucet").click(function(){
 	return false;
 });
 
-$("#button_auth").click(function(){
-	addAuth();
-	return false;
-});
-
+$("#button_auth").click(function(){addAuth()});
 
 $('#div1').collapse('show');
 
