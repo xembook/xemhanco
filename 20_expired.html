@@ -547,6 +547,7 @@ function addAuth2(){
 		alicePublicAccount // sender
 	);
 
+	
 	// 入力ダイアログを表示 ＋ 入力内容を user に代入
 	const aliceQR = qr.AccountQR.fromJSON(aliceJSON,
 		window.prompt("パスフレーズを入力してください", "")
@@ -639,9 +640,10 @@ async function addAuth(){
 	const signedAggregateTx = metaTx
 	.pipe(
 		op.mergeMap((tx) => {
+
 			const aggregateTx = nem.AggregateTransaction.createBonded(
 				nem.Deadline.create(),
-				[tx.toAggregate(alicePublicAccount)],
+				[tx.toAggregate(targetPublicAccount)],
 				nem.NetworkType.TEST_NET,
 				[],
 				nem.UInt64.fromUint(2000000)
