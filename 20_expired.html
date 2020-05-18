@@ -276,8 +276,7 @@ function showAccountQR(x){
 	$('#div2').collapse('show');
 	$('#hanco').attr('src',x);
 
-	listener
-	.confirmed(alicePublicAccount.address)
+	listener.confirmed(alicePublicAccount.address)
 	.pipe(
 		op.delay(1000),
 		op.mergeMap(x=>accountHttp.getAccountInfo(alicePublicAccount.address)),
@@ -292,37 +291,117 @@ function showAccountQR(x){
 		err => console.error(err)
 	);
 
-	accountHttp.getAccountPartialTransactions(alicePublicAccount.address)
-    .pipe(
-		op.delay(2000),
-        op.mergeMap(_ => _),
-        op.filter(_ => !_.signedByAccount(alicePublicAccount)),
-        op.map(_ => {
-			const aliceQR = qr.AccountQR.fromJSON(aliceJSON,
-				window.prompt("認証要求があります。パスフレーズをもう一度入力してください", "")
+	var subscribeBonded = function(observer){
+		observer
+		.pipe(
+			op.filter(_ => !_.signedByAccount(alicePublicAccount)),
+			op.map(_ => {
+				const aliceQR = qr.AccountQR.fromJSON(aliceJSON,
+					window.prompt("認証要求があります。パスフレーズをもう一度入力してください", "")
+				);
+				return aliceQR.account.signCosignatureTransaction(nem.CosignatureTransaction.create(_));
+			}),
+			op.mergeMap(_ => {
+				return rxjs.of({
+					ignored:txHttp.announceAggregateBondedCosignature(_),
+					hash:_.parentHash
+				});
+			})
+				
+		)
+		.subscribe(_ =>{
+			listener.confirmed(alicePublicAccount.address)
+			.pipe(
+				op.filter(tx => tx.transactionInfo !== undefined && tx.transactionInfo.hash === _.hash),
+			)
+			.subscribe(
+				function(x){
+					alert("認証完了しました");
+				},
+				err => console.error(err)
 			);
-            return aliceQR.account.signCosignatureTransaction(nem.CosignatureTransaction.create(_));
-        }),
-        op.mergeMap(_ => {
-            return rxjs.of({
+		}, err => console.error(err));
+	}
+
+	var bondedListener = listener.aggregateBondedAdded(alicePublicAccount.address)
+	.pipe(
+		ro.filter(_ => !_.signedByAccount(alicePublicAccount.address))
+	)
+
+	var bondedHttp = accountHttp.getAccountPartialTransactions(alicePublicAccount.address)
+	.pipe(
+		op.delay(2000),
+		op.mergeMap(_ => _)
+	);
+	
+	subscribeBonded(bondedListner);
+	subscribeBonded(bondedHttp);
+
+/*
+
+	listener.aggregateBondedAdded(alicePublicAccount.address)
+	.pipe(
+		ro.filter(_ => !_.signedByAccount(alicePublicAccount.address)),
+		op.map(_ => {
+			const aliceQR = qr.AccountQR.fromJSON(aliceJSON,
+				window.prompt("認証要求があります。パスフレーズを入力してください", "")
+			);
+			return aliceQR.account.signCosignatureTransaction(nem.CosignatureTransaction.create(_));
+		}),
+		op.mergeMap(_ => {
+			return rxjs.of({
 				ignored:txHttp.announceAggregateBondedCosignature(_),
 				hash:_.parentHash
 			});
-        })
-    )
-    .subscribe(_ => {
-		listener.confirmed(alicePublicAccount.address)
-	    .pipe(
-	        op.filter(tx => tx.transactionInfo !== undefined && tx.transactionInfo.hash === _.hash),
-	    )
-	    .subscribe(
-	        function(x){
-				alert("認証完了しました");
-	        },
-	        err => console.error(err)
-	    );
-    },err => console.error(err));
+		})
 
+	)
+	.subscribe(_ =>{
+		listener.confirmed(alicePublicAccount.address)
+		.pipe(
+			op.filter(tx => tx.transactionInfo !== undefined && tx.transactionInfo.hash === _.hash),
+		)
+		.subscribe(
+			function(x){
+				alert("認証完了しました");
+			},
+			err => console.error(err)
+		);
+	}, err => console.error(err));
+
+	accountHttp.getAccountPartialTransactions(alicePublicAccount.address)
+	.pipe(
+		op.delay(2000),
+		op.mergeMap(_ => _),
+		op.filter(_ => !_.signedByAccount(alicePublicAccount)),
+		op.map(_ => {
+			const aliceQR = qr.AccountQR.fromJSON(aliceJSON,
+				window.prompt("認証要求があります。パスフレーズをもう一度入力してください", "")
+			);
+			return aliceQR.account.signCosignatureTransaction(nem.CosignatureTransaction.create(_));
+		}),
+		op.mergeMap(_ => {
+			return rxjs.of({
+				ignored:txHttp.announceAggregateBondedCosignature(_),
+				hash:_.parentHash
+			});
+		})
+	)
+	.subscribe(_ => {
+		listener.confirmed(alicePublicAccount.address)
+		.pipe(
+			op.filter(tx => tx.transactionInfo !== undefined && tx.transactionInfo.hash === _.hash),
+		)
+		.subscribe(
+			function(x){
+				alert("認証完了しました");
+			},
+			err => console.error(err)
+		);
+	},err => console.error(err));
+
+
+*/
 	const contactQR = new qr.ContactQR("xemhanco.contact.1",alicePublicAccount);
 	contactQR.toBase64()
 	.subscribe(x=>{
@@ -401,8 +480,7 @@ async function addMeta(callback){
 		const aggregateTx = nem.AggregateTransaction.createComplete(
 			nem.Deadline.create(),
 			[metaTx.toAggregate(alicePublicAccount)],
-			nem.NetworkType.TEST_NET,
-			[],
+			nem.NetworkType.TEST_NET,[],
 			nem.UInt64.fromUint(100000)
 		);
 
@@ -424,7 +502,6 @@ async function addMeta(callback){
 function addAuth2(){
 
 	const targetPublicAccount = nem.PublicAccount.createFromPublicKey($('#confirmed_verify_publicKey').text(),nem.NetworkType.TEST_NET)
-
 	const key = nem.KeyGenerator.generateUInt64Key(alicePublicAccount.publicKey);
 	const value = 'authenticated';
 
@@ -443,15 +520,13 @@ function addAuth2(){
 		window.prompt("パスフレーズを入力してください", "")
 	);
 
-
 	const aggregateTx = nem.AggregateTransaction.createBonded(
 		nem.Deadline.create(),
 		[tx.toAggregate(alicePublicAccount)],
-		nem.NetworkType.TEST_NET,
-		[],
+		nem.NetworkType.TEST_NET,[],
 		nem.UInt64.fromUint(2000000)
 	);
-	const signedTx = aliceQR.account.sign(aggregateTx, GENERATION_HASH);
+	const signedAggregateTx = aliceQR.account.sign(aggregateTx, GENERATION_HASH);
 
 	const hashLockTx = nem.HashLockTransaction.create(
 		nem.Deadline.create(),
@@ -462,26 +537,19 @@ function addAuth2(){
 		nem.UInt64.fromUint(2000000)
 	);
 	const signedTx = aliceQR.account.sign(hashLockTx, GENERATION_HASH);
-	const signedAggregateHashLock =  {
-		aggregate: signedAggregateTx,
-		hashLock: signedTx,
-	};
-	console.log('Aggregate Transaction Hash:', signedAggregateTx.hash + '\n');
-	console.log('HashLock Transaction Hash:', signedTx.hash + '\n');
+	delete aliceQR;
 
-	transactionService.announceHashLockAggregateBonded(
-		signedAggregateHashLock.hashLock,
-		signedAggregateHashLock.aggregate,
-		listener)
+	const bondedListener = new nem.Listener(wsEndpoint, WebSocket);
+	bondedListener.open().then(() => {
 
-	.subscribe(
-		aggTx => {
+		transactionService.announceHashLockAggregateBonded(signedTx,signedAggregateTx,bondedListener)
+		.subscribe(aggTx => {
 
-			listener.confirmed(alicePublicAccount.address)
+			console.log('Transaction confirmed');
+
+			bondedListener.confirmed(alicePublicAccount.address)
 			.pipe(
-				op.filter(tx => {
-					return tx.transactionInfo !== undefined && tx.transactionInfo.hash === aggTx.transactionInfo.hash
-				}),
+				op.filter(tx =>  tx.transactionInfo !== undefined && tx.transactionInfo.hash === aggTx.transactionInfo.hash),
 			)
 			.subscribe(tx => {
 				alert("認証完了しました");
@@ -493,13 +561,9 @@ function addAuth2(){
 					.append('<li><b>認証日時:</b> <span>' + dispTimeStamp(bh.timestamp.compact() + SYMBOL_EPOCH * 1000) + '</span></li>');
 				})();
 			},err => console.error(err));
-			console.log('Transaction confirmed');
-		},
-		(err) => console.log(err),
-	//		() => listener.close()
-	);
-
-
+			
+		},(err) => console.log(err),() => bondedListener.close());
+	});
 }
 
 
@@ -572,12 +636,12 @@ async function addAuth(){
 		aggTx => {
 
 			listener.confirmed(alicePublicAccount.address)
-		    .pipe(
-		        op.filter(tx => {
+			.pipe(
+				op.filter(tx => {
 					return tx.transactionInfo !== undefined && tx.transactionInfo.hash === aggTx.transactionInfo.hash
 				}),
-		    )
-		    .subscribe(tx => {
+			)
+			.subscribe(tx => {
 				alert("認証完了しました");
 
 				(async() => {
@@ -586,7 +650,7 @@ async function addAuth(){
 					$('#confirmed_verify ul')
 					.append('<li><b>認証日時:</b> <span>' + dispTimeStamp(bh.timestamp.compact() + SYMBOL_EPOCH * 1000) + '</span></li>');
 				})();
-		    },err => console.error(err));
+			},err => console.error(err));
 			console.log('Transaction confirmed');
 		},
 		(err) => console.log(err),
@@ -684,9 +748,9 @@ $(".nav-item a").click( function(e){
 //QRコードスキャン完了時
 function resultQR(data){
 
-	if(currentTab == "tab_confirm"){      outputData.innerText = data;//承認
+	if(currentTab == "tab_confirm"){	  outputData.innerText = data;//承認
 	}else if(currentTab == "tab_verify"){ outputData.innerText = JSON.parse(data).data.hash;//検証
-	}else if(currentTab == "tab_"){       outputData.innerText = data;//復元
+	}else if(currentTab == "tab_"){ 	  outputData.innerText = data;//復元
 	}
 }
 
