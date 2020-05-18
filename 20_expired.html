@@ -520,50 +520,65 @@ function addAuth2(){
 		window.prompt("パスフレーズを入力してください", "")
 	);
 
-	const aggregateTx = nem.AggregateTransaction.createBonded(
-		nem.Deadline.create(),
-		[metaTx.toAggregate(alicePublicAccount)],
-		nem.NetworkType.TEST_NET,[],
-		nem.UInt64.fromUint(2000000)
-	);
-	const signedAggregateTx = aliceQR.account.sign(aggregateTx, GENERATION_HASH);
 
-	const hashLockTx = nem.HashLockTransaction.create(
-		nem.Deadline.create(),
-		new nem.Mosaic(new nem.MosaicId('519FC24B9223E0B4'),nem.UInt64.fromUint(10000000)),
-		nem.UInt64.fromUint(480),
-		signedAggregateTx,
-		nem.NetworkType.TEST_NET,
-		nem.UInt64.fromUint(2000000)
-	);
-	const signedTx = aliceQR.account.sign(hashLockTx, GENERATION_HASH);
-	delete aliceQR;
+	const signedAggregateTx = metaTx
+	.pipe(
+		op.mergeMap((tx) => {
+			const aggregateTx = nem.AggregateTransaction.createBonded(
+				nem.Deadline.create(),
+				[tx.toAggregate(alicePublicAccount)],
+				nem.NetworkType.TEST_NET,
+				[],
+				nem.UInt64.fromUint(2000000)
+			);
+			const signedTx = aliceQR.account.sign(aggregateTx, GENERATION_HASH);
+			return rxjs.of(signedTx);
+		})
+	)
+	.subscribe(signedAggregateTx =>
+	
+//		const signedAggregateTx = aliceQR.account.sign(aggregateTx, GENERATION_HASH);
 
-	const bondedListener = new nem.Listener(wsEndpoint, WebSocket);
-	bondedListener.open().then(() => {
+		const hashLockTx = nem.HashLockTransaction.create(
+			nem.Deadline.create(),
+			new nem.Mosaic(new nem.MosaicId('519FC24B9223E0B4'),nem.UInt64.fromUint(10000000)),
+			nem.UInt64.fromUint(480),
+			signedAggregateTx,
+			nem.NetworkType.TEST_NET,
+			nem.UInt64.fromUint(2000000)
+		);
+		const signedTx = aliceQR.account.sign(hashLockTx, GENERATION_HASH);
+		delete aliceQR;
 
-		transactionService.announceHashLockAggregateBonded(signedTx,signedAggregateTx,bondedListener)
-		.subscribe(aggTx => {
+		const bondedListener = new nem.Listener(wsEndpoint, WebSocket);
+		bondedListener.open().then(() => {
 
-			console.log('Transaction confirmed');
+			transactionService.announceHashLockAggregateBonded(signedTx,signedAggregateTx,bondedListener)
+			.subscribe(aggTx => {
 
-			bondedListener.confirmed(alicePublicAccount.address)
-			.pipe(
-				op.filter(tx =>  tx.transactionInfo !== undefined && tx.transactionInfo.hash === aggTx.transactionInfo.hash),
-			)
-			.subscribe(tx => {
-				alert("認証完了しました");
+				console.log('Transaction confirmed');
 
-				(async() => {
-					const bh = await blockHttp.getBlockByHeight(tx.transactionInfo.height).toPromise();
+				bondedListener.confirmed(alicePublicAccount.address)
+				.pipe(
+					op.filter(tx =>  tx.transactionInfo !== undefined && tx.transactionInfo.hash === aggTx.transactionInfo.hash),
+				)
+				.subscribe(tx => {
+					alert("認証完了しました");
 
-					$('#confirmed_verify ul')
-					.append('<li><b>認証日時:</b> <span>' + dispTimeStamp(bh.timestamp.compact() + SYMBOL_EPOCH * 1000) + '</span></li>');
-				})();
-			},err => console.error(err));
-			
-		},(err) => console.log(err),() => bondedListener.close());
-	});
+					(async() => {
+						const bh = await blockHttp.getBlockByHeight(tx.transactionInfo.height).toPromise();
+
+						$('#confirmed_verify ul')
+						.append('<li><b>認証日時:</b> <span>' + dispTimeStamp(bh.timestamp.compact() + SYMBOL_EPOCH * 1000) + '</span></li>');
+					})();
+				},err => console.error(err));
+				
+			},(err) => console.log(err),() => bondedListener.close());
+		});
+	
+	)
+		
+
 }
 
 
@@ -619,43 +634,49 @@ async function addAuth(){
 				aggregate: signedAggregateTx,
 				hashLock: signedTx,
 			};
+			delete aliceQR;
 			console.log('Aggregate Transaction Hash:', signedAggregateTx.hash + '\n');
 			console.log('HashLock Transaction Hash:', signedTx.hash + '\n');
 			return rxjs.of(signedAggregateHashLock);
 		})
 	);
 
-	signedAggregateHashLock.pipe(
-		op.mergeMap((signedAggregateHashLock) =>
-			transactionService.announceHashLockAggregateBonded(
-				signedAggregateHashLock.hashLock,
-				signedAggregateHashLock.aggregate,
-				listener),
-		),
-	).subscribe(
-		aggTx => {
 
-			listener.confirmed(alicePublicAccount.address)
-			.pipe(
-				op.filter(tx => {
-					return tx.transactionInfo !== undefined && tx.transactionInfo.hash === aggTx.transactionInfo.hash
-				}),
-			)
-			.subscribe(tx => {
-				alert("認証完了しました");
+	const bondedListener = new nem.Listener(wsEndpoint, WebSocket);
+	bondedListener.open().then(() => {
 
-				(async() => {
-					const bh = await blockHttp.getBlockByHeight(tx.transactionInfo.height).toPromise();
+		signedAggregateHashLock.pipe(
+			op.mergeMap((signedAggregateHashLock) =>
+				transactionService.announceHashLockAggregateBonded(
+					signedAggregateHashLock.hashLock,
+					signedAggregateHashLock.aggregate,
+					listener),
+			),
+		).subscribe(
+			aggTx => {
 
-					$('#confirmed_verify ul')
-					.append('<li><b>認証日時:</b> <span>' + dispTimeStamp(bh.timestamp.compact() + SYMBOL_EPOCH * 1000) + '</span></li>');
-				})();
-			},err => console.error(err));
-			console.log('Transaction confirmed');
-		},
-		(err) => console.log(err),
-//		() => listener.close()
-	);
+				bondedListener.confirmed(alicePublicAccount.address)
+				.pipe(
+					op.filter(tx => {
+						return tx.transactionInfo !== undefined && tx.transactionInfo.hash === aggTx.transactionInfo.hash
+					}),
+				)
+				.subscribe(tx => {
+					alert("認証完了しました");
+
+					(async() => {
+						const bh = await blockHttp.getBlockByHeight(tx.transactionInfo.height).toPromise();
+
+						$('#confirmed_verify ul')
+						.append('<li><b>認証日時:</b> <span>' + dispTimeStamp(bh.timestamp.compact() + SYMBOL_EPOCH * 1000) + '</span></li>');
+					})();
+				},err => console.error(err));
+				console.log('Transaction confirmed');
+			},
+			(err) => console.log(err),
+			() => bondedListener.close()
+		);
+	});
 }
 
 //はんこキャンセル
@@ -942,7 +963,7 @@ $("#faucet").click(function(){
 });
 
 $("#button_auth").click(function(){
-	addAuth2();
+	addAuth();
 	return false;
 });
 
