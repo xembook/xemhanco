@@ -325,7 +325,7 @@ function showAccountQR(x){
 
 	var bondedListener = listener.aggregateBondedAdded(alicePublicAccount.address)
 	.pipe(
-		ro.filter(_ => !_.signedByAccount(alicePublicAccount.address))
+		op.filter(_ => !_.signedByAccount(alicePublicAccount.address))
 	)
 
 	var bondedHttp = accountHttp.getAccountPartialTransactions(alicePublicAccount.address)
