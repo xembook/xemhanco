@@ -518,7 +518,7 @@ async function addAuth(){
 	.pipe(
 		op.mergeMap((metaTx) => {
 
-			const tx =     return nem.TransferTransaction.create(
+			const tx = nem.TransferTransaction.create(
 			    nem.Deadline.create(),
 			    item.address,[],
 			    nem.PlainMessage.create(''),
