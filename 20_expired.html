@@ -518,9 +518,10 @@ async function addAuth(){
 	.pipe(
 		op.mergeMap((metaTx) => {
 
-			const tx = nem.TransferTransaction.create(
+			//注：このトランザクションがなくても成立するがトリガーが反応しないため明示的に作成
+			const optinTx = nem.TransferTransaction.create(
 			    nem.Deadline.create(),
-			    item.address,[],
+			    alicePublicAccount.address,[],
 			    nem.PlainMessage.create(''),
 			    nem.NetworkType.TEST_NET
 			);
@@ -529,7 +530,7 @@ async function addAuth(){
 				nem.Deadline.create(),
 				[
 					metaTx.toAggregate(alicePublicAccount),
-					tx.toAggregate(targetPublicAccount)
+					optinTx.toAggregate(targetPublicAccount)
 				],
 				nem.NetworkType.TEST_NET,[],
 				nem.UInt64.fromUint(2000000)
