@@ -323,23 +323,20 @@ function showAccountQR(x){
 		}, err => console.error(err));
 	}
 
-	const bondedListener = listener.aggregateBondedAdded(alicePublicAccount.address)
-	.pipe(
-		op.filter(_ => !_.signedByAccount(alicePublicAccount.address))
-	)
-	
 
-	const bondedHttp = accountHttp.getAccountPartialTransactions(alicePublicAccount.address)
+
+	listener.aggregateBondedAdded(alicePublicAccount.address)
+	.subscribe(obs => bondedSubscribe(obs));
+
+	accountHttp.getAccountPartialTransactions(alicePublicAccount.address)
 	.pipe(
 		op.delay(2000),
 		op.mergeMap(_ => _)
-	);
-
-	bondedListener(_=>bondedSubscribe(_));
-	bondedHttp(_=>bondedSubscribe(_));
-	
-//	subscribeBonded(bondedListener);
-//	subscribeBonded(bondedHttp);
+	)
+	.subscribe(obs => bondedSubscribe(obs));
+		
+		
+		
 
 /*
 
