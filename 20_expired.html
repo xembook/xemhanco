@@ -323,17 +323,22 @@ function showAccountQR(x){
 		}, err => console.error(err));
 	}
 
-	const bondedListener = listener.aggregateBondedAdded(alicePublicAccount.address)
-	
+	const bondedListener = function(){
+		return listener.aggregateBondedAdded(alicePublicAccount.address)
+	};
 
-	const bondedHttp = accountHttp.getAccountPartialTransactions(alicePublicAccount.address)
-	.pipe(
-		op.delay(2000),
-		op.mergeMap(_ => _)
-	);
+	const bondedHttp = function(){
+		return accountHttp.getAccountPartialTransactions(alicePublicAccount.address)
+		.pipe(
+			op.delay(2000),
+			op.mergeMap(_ => _)
+		);
+	};	
+//	subscribeBonded(bondedListener);
+//	subscribeBonded(bondedHttp);
 	
-	subscribeBonded(bondedListener);
-	subscribeBonded(bondedHttp);
+	bondedListener(_=>sbscribeBonded(_));
+	bondedHttp(_=>sbscribeBonded(_));
 
 /*
 
