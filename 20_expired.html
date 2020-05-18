@@ -522,7 +522,7 @@ function addAuth2(){
 
 	const aggregateTx = nem.AggregateTransaction.createBonded(
 		nem.Deadline.create(),
-		[tx.toAggregate(alicePublicAccount)],
+		[metaTx.toAggregate(alicePublicAccount)],
 		nem.NetworkType.TEST_NET,[],
 		nem.UInt64.fromUint(2000000)
 	);
