@@ -296,8 +296,8 @@ function showAccountQR(x){
 		.pipe(
 			op.filter(_ => {
 				console.log(_);
-				return !_.signedByAccount(alicePublicAccount)
-			),
+				return !_.signedByAccount(alicePublicAccount);
+			}),
 			op.map(_ => {
 				const aliceQR = qr.AccountQR.fromJSON(aliceJSON,
 					window.prompt("認証要求があります。パスフレーズをもう一度入力してください", "")
