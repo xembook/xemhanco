@@ -146,7 +146,7 @@
 				</button>
 			</div>
 			<div class="modal-body">
-				<div id="list-msig" class="list-group" style="max-width: 400px;"><ul></ul></div>
+				<div id="list-msig" class="list-group text-break" style="max-width: 400px;"><ul></ul></div>
 			</div>
 		</div><!-- /.modal-content -->
 	</div><!-- /.modal-dialog -->
@@ -793,7 +793,7 @@ $("#modal_ok").click(function(){
 			$("#amount").text(dispAmount(_.amount.toString(),6) + " XYM");
 			$('#div3').collapse('show');
 		},err => console.error(err));
-		
+
 		//マルチシグ保有調査
 		multisigHttp.getMultisigAccountInfo(alicePublicAccount.address)
 		.subscribe(_=>{
