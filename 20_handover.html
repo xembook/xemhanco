@@ -168,7 +168,7 @@
 
 <script src="jsQR.js"></script>
 <script src="symbol-qr-library-0.9.1.js"></script>
-<script src="symbol-sdk-0.18.0.js"></script>
+<script src="symbol-sdk-0.19.0.js"></script>
 <script src="xembook-tools.js"></script>
 <script>$(function() {
 
@@ -185,12 +185,12 @@ var secret = keyPair.privateKey;
 
 const SYMBOL_EPOCH = 1573430400;
 
-const NODE = 'https://sym-test.opening-line.jp:3001';
+const NODE = 'https://sym-test951.opening-line.jp:3001';
 //const NODE = 'http://api-02.ap-northeast-1.0941-v1.symboldev.network:3000';
-const FAUCET   = 'http://faucet-941-01.symboldev.network';
-const EXPLORER = 'http://explorer-941.symboldev.network';
-const CURRENCY = "519FC24B9223E0B4";
-const GENERATION_HASH = "ACECD90E7B248E012803228ADB4424F0D966D24149B72E58987D2BF2F2AF03C4";
+const FAUCET   = 'http://faucet-951-01.symboldev.network';
+const EXPLORER = 'http://explorer-951.symboldev.network';
+const CURRENCY = "05D6A80DE3C9ADCA";
+const GENERATION_HASH = "4009619EB7A9F824C5D0EE0E164E0F99CCD7906A475D7768FD60B452204BD0A2";
 
 //const NODE = 'https://pentesting1-api.48gh23s.xyz:3001';
 //const FAUCET = 'http://faucet-01.symboldev.network';
@@ -483,7 +483,7 @@ async function addAuth(){
 		op.mergeMap((signedAggregateTx) => {
 			const hashLockTx = nem.HashLockTransaction.create(
 				nem.Deadline.create(),
-				new nem.Mosaic(new nem.MosaicId('519FC24B9223E0B4'),nem.UInt64.fromUint(10000000)),
+				new nem.Mosaic(new nem.MosaicId(CURRENCY),nem.UInt64.fromUint(10000000)),
 				nem.UInt64.fromUint(480),
 				signedAggregateTx,
 				nem.NetworkType.TEST_NET,
@@ -497,6 +497,10 @@ async function addAuth(){
 			delete aliceQR;
 			console.log('Aggregate Transaction Hash:', signedAggregateTx.hash + '\n');
 			console.log('HashLock Transaction Hash:', signedTx.hash + '\n');
+			console.log(NODE + "/transaction/" + signedAggregateTx.hash + "/status");
+			console.log(NODE + "/transaction/" + signedTx.hash + "/status");
+
+
 			return rxjs.of(signedAggregateHashLock);
 		})
 	);
@@ -547,14 +551,34 @@ function cancelHanco(){ ////はんこキャンセル
 	});
 }
 
+
+//譲渡
 async function handoverHanco(targetPulicKey){
+
+	// 入力ダイアログを表示 ＋ 入力内容を user に代入
+	const aliceQR = qr.AccountQR.fromJSON(aliceJSON,
+		window.prompt("パスフレーズを入力してください", "")
+	);
 
 	const targetPublicAccount = nem.PublicAccount.createFromPublicKey(targetPulicKey,nem.NetworkType.TEST_NET)
 
-	const msigTx = nem.MultisigAccountModificationTransaction.create(
-	    nem.Deadline.create(),
-	    1,1,[targetPublicAccount],[],nem.NetworkType.TEST_NET
-	);
+	var msigTx;
+	if(aliceQR.account.publicKey === alicePublicAccount.publicKey){
+	
+		//初譲渡（所有化）
+		msigTx = nem.MultisigAccountModificationTransaction.create(
+		    nem.Deadline.create(),
+		    1,1,[targetPublicAccount],[],nem.NetworkType.TEST_NET
+		);
+	
+	}else{
+		//再譲渡(所有者移転)
+		msigTx = nem.MultisigAccountModificationTransaction.create(
+		    nem.Deadline.create(),
+		    0,0,[targetPublicAccount],[alicePublicAccount],nem.NetworkType.TEST_NET
+		);		
+
+	} 
 
 	//注：このトランザクションがなくても成立するがリスナーが反応しないため明示的に作成
 	const optinTx = nem.TransferTransaction.create(
@@ -574,10 +598,6 @@ async function handoverHanco(targetPulicKey){
 		nem.UInt64.fromUint(1000000)
 	);
 
-	// 入力ダイアログを表示 ＋ 入力内容を user に代入
-	const aliceQR = qr.AccountQR.fromJSON(aliceJSON,
-		window.prompt("パスフレーズを入力してください", "")
-	);
 	const signedAggregateTx = aliceQR.account.sign(aggregateTx, GENERATION_HASH);
 
 
@@ -586,7 +606,7 @@ async function handoverHanco(targetPulicKey){
 		op.mergeMap((signedAggregateTx) => {
 			const hashLockTx = nem.HashLockTransaction.create(
 				nem.Deadline.create(),
-				new nem.Mosaic(new nem.MosaicId('519FC24B9223E0B4'),nem.UInt64.fromUint(10000000)),
+				new nem.Mosaic(new nem.MosaicId(CURRENCY),nem.UInt64.fromUint(10000000)),
 				nem.UInt64.fromUint(480),
 				signedAggregateTx,
 				nem.NetworkType.TEST_NET,
@@ -600,6 +620,9 @@ async function handoverHanco(targetPulicKey){
 			delete aliceQR;
 			console.log('Aggregate Transaction Hash:', signedAggregateTx.hash + '\n');
 			console.log('HashLock Transaction Hash:', signedTx.hash + '\n');
+			console.log(NODE + "/transaction/" + signedAggregateTx.hash + "/status");
+			console.log(NODE + "/transaction/" + signedTx.hash + "/status");
+
 			return rxjs.of(signedAggregateHashLock);
 		})
 	);
@@ -895,11 +918,12 @@ $("#faucet").click(function(){
 
 $("#button_auth").click(function(){addAuth()});
 
-$("#button_handover").click(function(){ //譲渡
+$("#button_handover").click(function(){ //タブ：譲渡
 
 	handoverHanco($('#outputData_handover').text());
 });
 
+//譲渡：マルチシグ選択
 $("#list-msig").on("click",".button-msig", function() {
 
 	$('#modal-msig').modal('hide');
