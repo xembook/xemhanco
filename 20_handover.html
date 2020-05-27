@@ -299,7 +299,10 @@ function showAccountQR(x){
 
 	var bondedSubscribe = function(observer){
 		observer.pipe(
-			op.filter(_ => !_.signedByAccount(alicePublicAccount)),
+			op.filter(_ => {
+				console.log(_);
+				return !_.signedByAccount(alicePublicAccount);
+			}),
 			op.map(_ => {
 				const aliceQR = qr.AccountQR.fromJSON(aliceJSON,
 					window.prompt("認証要求があります。パスフレーズをもう一度入力してください", "")
@@ -564,21 +567,20 @@ async function handoverHanco(targetPulicKey){
 
 	var msigTx;
 	if(aliceQR.account.publicKey === alicePublicAccount.publicKey){
-	
+
 		//初譲渡（所有化）
 		msigTx = nem.MultisigAccountModificationTransaction.create(
 		    nem.Deadline.create(),
 		    1,1,[targetPublicAccount],[],nem.NetworkType.TEST_NET
 		);
-	
+
 	}else{
 		//再譲渡(所有者移転)
 		msigTx = nem.MultisigAccountModificationTransaction.create(
 		    nem.Deadline.create(),
 		    0,0,[targetPublicAccount],[alicePublicAccount],nem.NetworkType.TEST_NET
-		);		
-
-	} 
+		);
+	}
 
 	//注：このトランザクションがなくても成立するがリスナーが反応しないため明示的に作成
 	const optinTx = nem.TransferTransaction.create(
@@ -612,7 +614,24 @@ async function handoverHanco(targetPulicKey){
 				nem.NetworkType.TEST_NET,
 				nem.UInt64.fromUint(2000000)
 			);
-			const signedTx = aliceQR.account.sign(hashLockTx, GENERATION_HASH);
+
+
+			const aggregateTx = nem.AggregateTransaction.createComplete(
+				nem.Deadline.create(),
+				[hashLockTx.toAggregate(alicePublicAccount)],
+				nem.NetworkType.TEST_NET,[],
+				nem.UInt64.fromUint(100000)
+			);
+
+			// 入力ダイアログを表示 ＋ 入力内容を user に代入
+//			const aliceQR = qr.AccountQR.fromJSON(aliceJSON,window.prompt("パスフレーズを入力してください", ""));
+//			const signedTx = aliceQR.account.sign(aggregateTx,GENERATION_HASH);
+
+
+
+
+
+			const signedTx = aliceQR.account.sign(aggregateTx, GENERATION_HASH);
 			const signedAggregateHashLock =  {
 				aggregate: signedAggregateTx,
 				hashLock: signedTx,
@@ -792,7 +811,6 @@ $("#modal_ok").click(function(){
 			const aliceQR = qr.AccountQR.fromJSON(outputData.innerText,$("#pass").val());
 			alicePublicAccount = aliceQR.account.publicAccount;
 			aliceQR.toBase64().subscribe(x => {
-				showAccountQR(x);
 				$('#div1').collapse('hide');
 				$('#div2').collapse('show');
 				$('#hanco').attr('src',x);
@@ -807,21 +825,14 @@ $("#modal_ok").click(function(){
 			console.log(e);
 		}
 
-		accountHttp.getAccountInfo(alicePublicAccount.address)
-		.pipe(
-			op.mergeMap(_=>_.mosaics),
-			op.filter(_ => _.id.toHex() === CURRENCY)
-		)
-		.subscribe(_=>{
-			$("#amount").text(dispAmount(_.amount.toString(),6) + " XYM");
-			$('#div3').collapse('show');
-		},err => console.error(err));
-
 		//マルチシグ保有調査
 		multisigHttp.getMultisigAccountInfo(alicePublicAccount.address)
 		.subscribe(_=>{
 
 			if(_.multisigAccounts.length > 0){
+
+
+
 
 				$('#list-msig ul')
 			 	.append('<button type="button" publicKey="'+ alicePublicAccount.publicKey  +'" data-toggle="msig" class="button-msig list-group-item list-group-item-action">マイはんこ</button>')
@@ -832,6 +843,19 @@ $("#modal_ok").click(function(){
 					.append('<button type="button" publicKey="'+ item.publicKey  +'" data-toggle="msig" class="button-msig list-group-item list-group-item-action">' +item.publicKey +'</button>')
 				}
 				$('#modal-msig').modal('show');
+			}else{
+
+				showAccountQR();
+
+				accountHttp.getAccountInfo(alicePublicAccount.address)
+				.pipe(
+					op.mergeMap(_=>_.mosaics),
+					op.filter(_ => _.id.toHex() === CURRENCY)
+				)
+				.subscribe(_=>{
+					$("#amount").text(dispAmount(_.amount.toString(),6) + " XYM");
+					$('#div3').collapse('show');
+				},err => console.error(err));
 			}
 			$('#div3').collapse('show');
 		});
