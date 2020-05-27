@@ -212,14 +212,11 @@ listener.open().then(() => {
 	setInterval(function(){listener.newBlock()}, 30000);
 });
 
-var aliceConfirmed;
-
 const aliceSignedTxConfirmed = function(signedTx){
 
 	return listener.confirmed(alicePublicAccount.address).pipe(
 		op.filter((tx) => tx.transactionInfo !== undefined && tx.transactionInfo.hash === signedTx.hash)
-	)	
-
+	)
 }
 
 //グローバル変数
@@ -342,7 +339,6 @@ function scanFileImage(){
 }
 ////////////////////////////////////////////////////////
 
-
 //署名要求検知リスナー
 function setCosignerListener(cosignerAccount){
 
@@ -385,8 +381,7 @@ function setCosignerListener(cosignerAccount){
 	bondedSubscribe(bondedHttp);
 }
 
-
-//はんこ表示
+//はんこ情報表示
 function showAccountQR(x){
 
 	const accountSubscribe = function(observer){
@@ -406,7 +401,7 @@ function showAccountQR(x){
 		op.delay(1000),
 		op.mergeMap(x=>accountHttp.getAccountInfo(alicePublicAccount.address)),
 	);
-	
+
 	accountSubscribe(aliceHttp);
 	accountSubscribe(aliceListener);
 
@@ -444,7 +439,6 @@ function signByHanco(confirmedAddress,divId,message){
 		nem.UInt64.fromUint(100000)
 	);
 
-	// 入力ダイアログを表示 ＋ 入力内容を user に代入
 	const aliceQR = qr.AccountQR.fromJSON(aliceJSON,window.prompt("パスフレーズを入力してください", ""));
 	const signedTx = aliceQR.account.sign(aggregateTx,GENERATION_HASH);
 	delete aliceQR;
@@ -470,7 +464,7 @@ function signByHanco(confirmedAddress,divId,message){
 	console.log(NODE + "/transaction/" + signedTx.hash + "/status");
 }
 
-//キャンセル
+//無効化
 async function addMeta(callback){
 
 	const key = nem.KeyGenerator.generateUInt64Key(alicePublicAccount.publicKey);
@@ -493,10 +487,7 @@ async function addMeta(callback){
 			nem.UInt64.fromUint(100000)
 		);
 
-		// 入力ダイアログを表示 ＋ 入力内容を user に代入
-		const aliceQR = qr.AccountQR.fromJSON(aliceJSON,
-			window.prompt("パスフレーズを入力してください", "")
-		);
+		const aliceQR = qr.AccountQR.fromJSON(aliceJSON,window.prompt("パスフレーズを入力してください", ""));
 		const signedTx = aliceQR.account.sign(aggregateTx,GENERATION_HASH);
 		delete aliceQR;
 
@@ -521,11 +512,7 @@ async function addAuth(){
 		alicePublicAccount // sender
 	);
 
-	// 入力ダイアログを表示 ＋ 入力内容を user に代入
-	const aliceQR = qr.AccountQR.fromJSON(aliceJSON,
-		window.prompt("パスフレーズを入力してください", "")
-	);
-
+	const aliceQR = qr.AccountQR.fromJSON(aliceJSON,window.prompt("パスフレーズを入力してください", ""));
 	const callback = function(aggTx){
 
 //		bondedListener.confirmed(targetPublicAccount.address)
@@ -534,7 +521,6 @@ async function addAuth(){
 //		.pipe(
 //			op.filter(tx => tx.transactionInfo !== undefined && tx.transactionInfo.hash === aggTx.transactionInfo.hash)
 //		)
-
 		aliceSignedTxConfirmed(aggTx.transactionInfo)
 		.subscribe(tx => {
 			alert("認証完了しました");
@@ -546,105 +532,14 @@ async function addAuth(){
 		},err => console.error(err));
 		console.log('Transaction confirmed');
 	}
-
-
 	executeTx(targetPublicAccount,metaTx,callback,aliceQR.account);
-
-/*
-	const signedAggregateTx = metaTx
-	.pipe(
-		op.mergeMap((metaTx) => {
-
-			//注：このトランザクションがなくても成立するがトリガーが反応しないため明示的に作成
-			const optinTx = nem.TransferTransaction.create(
-			    nem.Deadline.create(),
-			    alicePublicAccount.address,[],
-			    nem.PlainMessage.create(''),
-			    nem.NetworkType.TEST_NET
-			);
-
-			const aggregateTx = nem.AggregateTransaction.createBonded(
-				nem.Deadline.create(),
-				[
-					metaTx.toAggregate(alicePublicAccount),
-					optinTx.toAggregate(targetPublicAccount)
-				],
-				nem.NetworkType.TEST_NET,[],
-				nem.UInt64.fromUint(2000000)
-			);
-			const signedTx = aliceQR.account.sign(aggregateTx, GENERATION_HASH);
-			return rxjs.of(signedTx);
-		})
-	);
-
-	signedAggregateHashLock = signedAggregateTx.pipe(
-		op.mergeMap((signedAggregateTx) => {
-			const hashLockTx = nem.HashLockTransaction.create(
-				nem.Deadline.create(),
-				new nem.Mosaic(new nem.MosaicId(CURRENCY),nem.UInt64.fromUint(10000000)),
-				nem.UInt64.fromUint(480),
-				signedAggregateTx,
-				nem.NetworkType.TEST_NET,
-				nem.UInt64.fromUint(2000000)
-			);
-			const signedTx = aliceQR.account.sign(hashLockTx, GENERATION_HASH);
-			const signedAggregateHashLock =  {
-				aggregate: signedAggregateTx,
-				hashLock: signedTx,
-			};
-			delete aliceQR;
-			console.log('Aggregate Transaction Hash:', signedAggregateTx.hash + '\n');
-			console.log('HashLock Transaction Hash:', signedTx.hash + '\n');
-			console.log(NODE + "/transaction/" + signedAggregateTx.hash + "/status");
-			console.log(NODE + "/transaction/" + signedTx.hash + "/status");
-
-
-			return rxjs.of(signedAggregateHashLock);
-		})
-	);
-
-
-	signedAggregateHashLock.pipe(
-		op.mergeMap((signedAggregateHashLock) =>
-			transactionService.announceHashLockAggregateBonded(
-				signedAggregateHashLock.hashLock,
-				signedAggregateHashLock.aggregate,
-				listener),
-		),
-	).subscribe(aggTx => {
-
-//		bondedListener.confirmed(targetPublicAccount.address)
-//		aliceConfirmed
-
-//		.pipe(
-//			op.filter(tx => tx.transactionInfo !== undefined && tx.transactionInfo.hash === aggTx.transactionInfo.hash)
-//		)
-
-		aliceSignedTxConfirmed(aggTx.transactionInfo)
-		.subscribe(tx => {
-			alert("認証完了しました");
-			(async() => {
-				const bh = await blockHttp.getBlockByHeight(tx.transactionInfo.height).toPromise();
-				$('#confirmed_verify ul')
-				.append('<li><b>認証日時:</b> <span>' + dispTimeStamp(bh.timestamp.compact() + SYMBOL_EPOCH * 1000) + '</span></li>');
-			})();
-		},err => console.error(err));
-		console.log('Transaction confirmed');
-	},
-	(err) => console.log(err));
-	
-*/
 }
 
 //譲渡
 async function handoverHanco(targetPulicKey){
 
 	const targetPublicAccount = nem.PublicAccount.createFromPublicKey(targetPulicKey,nem.NetworkType.TEST_NET)
-
-	// 入力ダイアログを表示 ＋ 入力内容を user に代入
-	const aliceQR = qr.AccountQR.fromJSON(aliceJSON,
-		window.prompt("パスフレーズを入力してください", "")
-	);
+	const aliceQR = qr.AccountQR.fromJSON(aliceJSON,window.prompt("パスフレーズを入力してください", ""));
 
 	var msigTx;
 	if(aliceQR.account.publicKey === alicePublicAccount.publicKey){
@@ -656,7 +551,6 @@ async function handoverHanco(targetPulicKey){
 		);
 
 	}else{
-
 		//再譲渡(所有移転)
 		msigTx = nem.MultisigAccountModificationTransaction.create(
 		    nem.Deadline.create(),
@@ -684,99 +578,11 @@ async function handoverHanco(targetPulicKey){
 		(err) => console.log(err),
 		() => bondedListener.close());
 		////////////////////////////////////////////////
-		
 	}
 	executeTx(targetPublicAccount,msigTx,callback,aliceQR.account);
-/*
-	//注：このトランザクションがなくても成立するがリスナーが反応しないため明示的に作成
-	const optinTx = nem.TransferTransaction.create(
-		nem.Deadline.create(),
-		alicePublicAccount.address,[],
-		nem.PlainMessage.create(''),
-		nem.NetworkType.TEST_NET
-	);
-
-	const aggregateTx = nem.AggregateTransaction.createBonded(
-		nem.Deadline.create(),
-		[
-			msigTx.toAggregate(alicePublicAccount),
-			optinTx.toAggregate(targetPublicAccount) //carol->bob
-		],
-		nem.NetworkType.TEST_NET,[],
-		nem.UInt64.fromUint(1000000)
-	);
-	
-	const signedAggregateTx = aliceQR.account.sign(aggregateTx, GENERATION_HASH);
-
-	signedAggregateHashLock = rxjs.of(signedAggregateTx)
-	.pipe(
-		op.mergeMap((signedAggregateTx) => {
-			const hashLockTx = nem.HashLockTransaction.create(
-				nem.Deadline.create(),
-				new nem.Mosaic(new nem.MosaicId(CURRENCY),nem.UInt64.fromUint(10000000)),
-				nem.UInt64.fromUint(480),
-				signedAggregateTx,
-				nem.NetworkType.TEST_NET,
-				nem.UInt64.fromUint(2000000)
-			);
-
-
-			const aggregateTx = nem.AggregateTransaction.createComplete(
-				nem.Deadline.create(),
-				[hashLockTx.toAggregate(alicePublicAccount)],
-				nem.NetworkType.TEST_NET,[],
-				nem.UInt64.fromUint(100000)
-			);
-
-			const signedTx = aliceQR.account.sign(aggregateTx, GENERATION_HASH);
-			delete aliceQR;
-
-			const signedAggregateHashLock =  {
-				aggregate: signedAggregateTx,
-				hashLock: signedTx,
-			};
-			console.log('Aggregate Transaction Hash:', signedAggregateTx.hash + '\n');
-			console.log('HashLock Transaction Hash:', signedTx.hash + '\n');
-			console.log(NODE + "/transaction/" + signedAggregateTx.hash + "/status");
-			console.log(NODE + "/transaction/" + signedTx.hash + "/status");
-
-			return rxjs.of(signedAggregateHashLock);
-		})
-	);
-
-	signedAggregateHashLock.pipe(
-		op.mergeMap((signedAggregateHashLock) =>
-			transactionService.announceHashLockAggregateBonded(
-				signedAggregateHashLock.hashLock,
-				signedAggregateHashLock.aggregate,
-				listener),
-		),
-	).subscribe(aggTx => {
-
-		//譲渡済みのため、譲渡先のアカウントを監視する//
-		const bondedListener = new nem.Listener(wsEndpoint, WebSocket);
-		bondedListener.open().then(() => {
-
-			bondedListener.confirmed(targetPublicAccount.address)
-			.pipe(
-				op.filter(tx => {
-					console.log(tx);
-					return tx.transactionInfo !== undefined && tx.transactionInfo.hash === aggTx.transactionInfo.hash;
-				})
-			)
-			.subscribe(tx => {
-				alert("譲渡完了しました");
-			},err => console.error(err));
-		},
-		(err) => console.log(err),
-		() => bondedListener.close());
-		////////////////////////////////////////////////
-		
-	});
-*/
 }
 
-
+//アグリゲートトランザクション
 function executeTx(targetPublicAccount,msigTx,callback,signer){
 
 	//注：このトランザクションがなくても成立するがリスナーが反応しないため明示的に作成
@@ -796,7 +602,7 @@ function executeTx(targetPublicAccount,msigTx,callback,signer){
 		nem.NetworkType.TEST_NET,[],
 		nem.UInt64.fromUint(1000000)
 	);
-	
+
 	const signedAggregateTx = signer.sign(aggregateTx, GENERATION_HASH);
 
 	signedAggregateHashLock = rxjs.of(signedAggregateTx)
@@ -842,11 +648,9 @@ function executeTx(targetPublicAccount,msigTx,callback,signer){
 				listener),
 		),
 	).subscribe(aggTx => {
-		callback(aggTx);	
+		callback(aggTx);
 	});
-
 }
-
 
 //キャンセル
 function cancelSign(hash){addMeta(_ => {})} //トランザクションキャンセル
@@ -991,19 +795,12 @@ $("#modal_ok").click(function(){
 			}
 		},
 		err=>{
-
 			showAccountQR();
-			dispAccountInfo();
-
-		
 		},
-		_=>$('#div3').collapse('show'));
+		()=>$('#div3').collapse('show'));
 	}
 });
 
-function dispAccountInfo(){
-
-}
 //■■■VIEW■■■
 
 $("#create").click(function(){
@@ -1095,11 +892,8 @@ $("#button_handover").click(function(){ //タブ：譲渡
 $("#list-msig").on("click",".button-msig", function() {
 
 	$('#modal-msig').modal('hide');
-
 	alicePublicAccount = nem.PublicAccount.createFromPublicKey($(this).attr("publicKey"),nem.NetworkType.TEST_NET);
 	showAccountQR();
-	dispAccountInfo();
-
 });
 
 $('#div1').collapse('show');//アプリケーション開始
