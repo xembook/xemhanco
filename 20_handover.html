@@ -198,11 +198,11 @@ const GENERATION_HASH = "4009619EB7A9F824C5D0EE0E164E0F99CCD7906A475D7768FD60B45
 //const CURRENCY = "747B276C30626442";
 //const EXPLORER = 'http://explorer.symboldev.network';
 
-const accountHttp = new nem.AccountHttp(NODE);
 const txHttp  = new nem.TransactionHttp(NODE);
+const metaHttp = new nem.MetadataHttp(NODE);
 const blockHttp = new nem.BlockHttp(NODE);
 const receiptHttp = new nem.ReceiptHttp(NODE);
-const metaHttp = new nem.MetadataHttp(NODE);
+const accountHttp = new nem.AccountHttp(NODE);
 const multisigHttp = new nem.MultisigHttp(NODE);
 const metaService = new nem.MetadataTransactionService(metaHttp);
 const transactionService = new nem.TransactionService(txHttp, receiptHttp);
@@ -283,6 +283,50 @@ function stopVideo(){
 	}
 }
 
+function setCosignerListener(cosignerAccount){
+
+	var bondedSubscribe = function(observer){
+		observer.pipe(
+			op.filter(_ => {
+				console.log(_);
+				return !_.signedByAccount(cosignerAccount);
+			}),
+			op.map(_ => {
+				const aliceQR = qr.AccountQR.fromJSON(aliceJSON,
+					window.prompt("連署要求があります。パスフレーズをもう一度入力してください", "")
+				);
+				return aliceQR.account.signCosignatureTransaction(nem.CosignatureTransaction.create(_));
+			}),
+			op.mergeMap(_ => {
+				return rxjs.of({
+					ignored:txHttp.announceAggregateBondedCosignature(_),
+					hash:_.parentHash
+				});
+			})
+		)
+		.subscribe(_ =>{
+			listener.confirmed(cosignerAccount.address)
+			.pipe(
+				op.filter(tx => tx.transactionInfo !== undefined && tx.transactionInfo.hash === _.hash),
+			)
+			.subscribe(
+				x => alert("署名完了しました"),
+				err => console.error(err)
+			);
+		}, err => console.error(err));
+	}
+
+	const bondedListener = listener.aggregateBondedAdded(cosignerAccount.address)
+	const bondedHttp = accountHttp.getAccountPartialTransactions(cosignerAccount.address)
+	.pipe(
+		op.delay(2000),
+		op.mergeMap(_ => _)
+	);
+
+	bondedSubscribe(bondedListener);
+	bondedSubscribe(bondedHttp);
+}
+
 function showAccountQR(x){
 
 	listener.confirmed(alicePublicAccount.address)
@@ -296,47 +340,6 @@ function showAccountQR(x){
 		$("#amount").text(dispAmount(_.amount.toString(),6) + " XYM");
 		$('#div3').collapse('show');
 	},err => console.error(err));
-
-	var bondedSubscribe = function(observer){
-		observer.pipe(
-			op.filter(_ => {
-				console.log(_);
-				return !_.signedByAccount(alicePublicAccount);
-			}),
-			op.map(_ => {
-				const aliceQR = qr.AccountQR.fromJSON(aliceJSON,
-					window.prompt("認証要求があります。パスフレーズをもう一度入力してください", "")
-				);
-				return aliceQR.account.signCosignatureTransaction(nem.CosignatureTransaction.create(_));
-			}),
-			op.mergeMap(_ => {
-				return rxjs.of({
-					ignored:txHttp.announceAggregateBondedCosignature(_),
-					hash:_.parentHash
-				});
-			})
-		)
-		.subscribe(_ =>{
-			listener.confirmed(alicePublicAccount.address)
-			.pipe(
-				op.filter(tx => tx.transactionInfo !== undefined && tx.transactionInfo.hash === _.hash),
-			)
-			.subscribe(
-				x => alert("認証完了しました"),
-				err => console.error(err)
-			);
-		}, err => console.error(err));
-	}
-
-	const bondedListener = listener.aggregateBondedAdded(alicePublicAccount.address)
-	const bondedHttp = accountHttp.getAccountPartialTransactions(alicePublicAccount.address)
-	.pipe(
-		op.delay(2000),
-		op.mergeMap(_ => _)
-	);
-
-	bondedSubscribe(bondedListener);
-	bondedSubscribe(bondedHttp);
 
 	const contactQR = new qr.ContactQR("xemhanco.contact.1",alicePublicAccount);
 	contactQR.toBase64().subscribe(x => {
@@ -558,12 +561,12 @@ function cancelHanco(){ ////はんこキャンセル
 //譲渡
 async function handoverHanco(targetPulicKey){
 
+	const targetPublicAccount = nem.PublicAccount.createFromPublicKey(targetPulicKey,nem.NetworkType.TEST_NET)
+
 	// 入力ダイアログを表示 ＋ 入力内容を user に代入
 	const aliceQR = qr.AccountQR.fromJSON(aliceJSON,
 		window.prompt("パスフレーズを入力してください", "")
 	);
-
-	const targetPublicAccount = nem.PublicAccount.createFromPublicKey(targetPulicKey,nem.NetworkType.TEST_NET)
 
 	var msigTx;
 	if(aliceQR.account.publicKey === alicePublicAccount.publicKey){
@@ -575,10 +578,11 @@ async function handoverHanco(targetPulicKey){
 		);
 
 	}else{
-		//再譲渡(所有者移転)
+
+		//再譲渡(所有移転)
 		msigTx = nem.MultisigAccountModificationTransaction.create(
 		    nem.Deadline.create(),
-		    0,0,[targetPublicAccount],[alicePublicAccount],nem.NetworkType.TEST_NET
+		    0,0,[targetPublicAccount],[aliceQR.account],nem.NetworkType.TEST_NET
 		);
 	}
 
@@ -594,14 +598,13 @@ async function handoverHanco(targetPulicKey){
 		nem.Deadline.create(),
 		[
 			msigTx.toAggregate(alicePublicAccount),
-			optinTx.toAggregate(targetPublicAccount)
+			optinTx.toAggregate(targetPublicAccount) //carol->bob
 		],
 		nem.NetworkType.TEST_NET,[],
 		nem.UInt64.fromUint(1000000)
 	);
-
+	
 	const signedAggregateTx = aliceQR.account.sign(aggregateTx, GENERATION_HASH);
-
 
 	signedAggregateHashLock = rxjs.of(signedAggregateTx)
 	.pipe(
@@ -623,20 +626,13 @@ async function handoverHanco(targetPulicKey){
 				nem.UInt64.fromUint(100000)
 			);
 
-			// 入力ダイアログを表示 ＋ 入力内容を user に代入
-//			const aliceQR = qr.AccountQR.fromJSON(aliceJSON,window.prompt("パスフレーズを入力してください", ""));
-//			const signedTx = aliceQR.account.sign(aggregateTx,GENERATION_HASH);
-
-
-
-
-
 			const signedTx = aliceQR.account.sign(aggregateTx, GENERATION_HASH);
+			delete aliceQR;
+
 			const signedAggregateHashLock =  {
 				aggregate: signedAggregateTx,
 				hashLock: signedTx,
 			};
-			delete aliceQR;
 			console.log('Aggregate Transaction Hash:', signedAggregateTx.hash + '\n');
 			console.log('HashLock Transaction Hash:', signedTx.hash + '\n');
 			console.log(NODE + "/transaction/" + signedAggregateTx.hash + "/status");
@@ -658,9 +654,15 @@ async function handoverHanco(targetPulicKey){
 			),
 		).subscribe(aggTx => {
 
+			console.log("========================================");
+
 			bondedListener.confirmed(alicePublicAccount.address)
 			.pipe(
-				op.filter(tx => tx.transactionInfo !== undefined && tx.transactionInfo.hash === aggTx.transactionInfo.hash)
+				op.take(1),//なぜか2回流れるので1回のみ取得
+				op.filter(tx => {
+					console.log(tx);
+					return tx.transactionInfo !== undefined && tx.transactionInfo.hash === aggTx.transactionInfo.hash;
+				})
 			)
 			.subscribe(tx => {
 				alert("譲渡完了しました");
@@ -810,6 +812,7 @@ $("#modal_ok").click(function(){
 		try{
 			const aliceQR = qr.AccountQR.fromJSON(outputData.innerText,$("#pass").val());
 			alicePublicAccount = aliceQR.account.publicAccount;
+			setCosignerListener(alicePublicAccount);
 			aliceQR.toBase64().subscribe(x => {
 				$('#div1').collapse('hide');
 				$('#div2').collapse('show');
@@ -832,8 +835,6 @@ $("#modal_ok").click(function(){
 			if(_.multisigAccounts.length > 0){
 
 
-
-
 				$('#list-msig ul')
 			 	.append('<button type="button" publicKey="'+ alicePublicAccount.publicKey  +'" data-toggle="msig" class="button-msig list-group-item list-group-item-action">マイはんこ</button>')
 
@@ -845,20 +846,25 @@ $("#modal_ok").click(function(){
 				$('#modal-msig').modal('show');
 			}else{
 
-				showAccountQR();
-
-				accountHttp.getAccountInfo(alicePublicAccount.address)
-				.pipe(
-					op.mergeMap(_=>_.mosaics),
-					op.filter(_ => _.id.toHex() === CURRENCY)
-				)
-				.subscribe(_=>{
-					$("#amount").text(dispAmount(_.amount.toString(),6) + " XYM");
-					$('#div3').collapse('show');
-				},err => console.error(err));
 			}
 			$('#div3').collapse('show');
-		});
+		},
+		err=>{
+
+			showAccountQR();
+
+			accountHttp.getAccountInfo(alicePublicAccount.address)
+			.pipe(
+				op.mergeMap(_=>_.mosaics),
+				op.filter(_ => _.id.toHex() === CURRENCY)
+			)
+			.subscribe(_=>{
+				$("#amount").text(dispAmount(_.amount.toString(),6) + " XYM");
+				$('#div3').collapse('show');
+			},err => console.error(err));
+		
+		},
+		_=>$('#div3').collapse('show'));
 	}
 });
 
@@ -868,6 +874,8 @@ $("#create").click(function(){
 
 	const alice = nem.Account.generateNewAccount(nem.NetworkType.TEST_NET);
 	alicePublicAccount = alice.publicAccount;
+	setCosignerListener(alicePublicAccount);
+
 	const aliceQR = new qr.AccountQR(alice,$("#pass").val(),nem.NetworkType.TEST_NET);
 	aliceQR.toBase64().subscribe(x =>{
 		showAccountQR(x);
