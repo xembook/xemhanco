@@ -212,12 +212,6 @@ listener.open().then(() => {
 	setInterval(function(){listener.newBlock()}, 30000);
 });
 
-const aliceSignedTxConfirmed = function(signedTx){
-
-	return listener.confirmed(alicePublicAccount.address).pipe(
-		op.filter((tx) => tx.transactionInfo !== undefined && tx.transactionInfo.hash === signedTx.hash)
-	)
-}
 
 //グローバル変数
 var alicePublicAccount;//操作対象アカウント（マルチシグの場合は操作される対象のアカウント）
@@ -339,15 +333,20 @@ function scanFileImage(){
 }
 ////////////////////////////////////////////////////////
 
+
+const aliceSignedTxConfirmed = function(signedTx){
+
+	return listener.confirmed(alicePublicAccount.address).pipe(
+		op.filter((tx) => tx.transactionInfo !== undefined && tx.transactionInfo.hash === signedTx.hash)
+	)
+}
+
 //署名要求検知リスナー
 function setCosignerListener(cosignerAccount){
 
 	var bondedSubscribe = function(observer){
 		observer.pipe(
-			op.filter(_ => {
-				console.log(_);
-				return !_.signedByAccount(cosignerAccount);
-			}),
+			op.filter(_ =>  !_.signedByAccount(cosignerAccount)),
 			op.map(_ => {
 				const aliceQR = qr.AccountQR.fromJSON(aliceJSON,
 					window.prompt("署名要求があります。パスフレーズをもう一度入力してください", "")
@@ -359,15 +358,13 @@ function setCosignerListener(cosignerAccount){
 					ignored:txHttp.announceAggregateBondedCosignature(_),
 					hash:_.parentHash
 				});
-			})
+			}),
+			op.mergeMap(_=>aliceSignedTxConfirmed(_))
 		)
-		.subscribe(_ =>{
-			aliceSignedTxConfirmed(_)
-			.subscribe(
-				x => alert("署名完了しました"),
-				err => console.error(err)
-			);
-		}, err => console.error(err));
+		.subscribe(
+			x => alert("署名完了しました"),
+			err => console.error(err)
+		);
 	}
 
 	const bondedListener = listener.aggregateBondedAdded(cosignerAccount.address)
@@ -470,37 +467,37 @@ async function addMeta(callback){
 	const key = nem.KeyGenerator.generateUInt64Key(alicePublicAccount.publicKey);
 	const value = 'disabled';
 
-	(async() => {
-		const metaTx = await metaService.createMetadataTransaction(
-			nem.Deadline.create(),
-			nem.NetworkType.TEST_NET,
-			nem.MetadataType.Account,
-			alicePublicAccount,//target
-			key,value,
-			alicePublicAccount // sender
-		).toPromise();
+	const metaTx = await metaService.createMetadataTransaction(
+		nem.Deadline.create(),
+		nem.NetworkType.TEST_NET,
+		nem.MetadataType.Account,
+		alicePublicAccount,//target
+		key,value,
+		alicePublicAccount // sender
+	).toPromise();
 
-		const aggregateTx = nem.AggregateTransaction.createComplete(
-			nem.Deadline.create(),
-			[metaTx.toAggregate(alicePublicAccount)],
-			nem.NetworkType.TEST_NET,[],
-			nem.UInt64.fromUint(100000)
-		);
+	const aggregateTx = nem.AggregateTransaction.createComplete(
+		nem.Deadline.create(),
+		[metaTx.toAggregate(alicePublicAccount)],
+		nem.NetworkType.TEST_NET,[],
+		nem.UInt64.fromUint(100000)
+	);
 
-		const aliceQR = qr.AccountQR.fromJSON(aliceJSON,window.prompt("パスフレーズを入力してください", ""));
-		const signedTx = aliceQR.account.sign(aggregateTx,GENERATION_HASH);
-		delete aliceQR;
+	const aliceQR = qr.AccountQR.fromJSON(aliceJSON,window.prompt("パスフレーズを入力してください", ""));
+	const signedTx = aliceQR.account.sign(aggregateTx,GENERATION_HASH);
+	delete aliceQR;
 
-		const res = await txHttp.announce(signedTx).toPromise();
-		callback(signedTx);
-		console.log(NODE + "/transaction/" + signedTx.hash + "/status");
-	})();
+	const res = await txHttp.announce(signedTx).toPromise();
+	callback(signedTx);
+	console.log(NODE + "/transaction/" + signedTx.hash + "/status");
 }
 
 //認証
 async function addAuth(){
 
-	const targetPublicAccount = nem.PublicAccount.createFromPublicKey($('#confirmed_verify_publicKey').text(),nem.NetworkType.TEST_NET)
+	const tx = await txHttp.getTransaction($('#confirmed_verify_hash').text()).toPromise();
+	const ac = await accountHttp.getAccountInfo(tx.innerTransactions[0].recipientAddress).toPromise();
+	const targetPublicAccount = nem.PublicAccount.createFromPublicKey(ac.publicKey,nem.NetworkType.TEST_NET)
 	const key = nem.KeyGenerator.generateUInt64Key(alicePublicAccount.publicKey);
 	const value = 'authenticated';
 	const aliceQR = qr.AccountQR.fromJSON(aliceJSON,window.prompt("パスフレーズを入力してください", ""));
@@ -512,110 +509,20 @@ async function addAuth(){
 		targetPublicAccount,//target
 		key,value,
 		alicePublicAccount // sender
-	);
 
+	).subscribe(tx=>{
 
-	const signedAggregateTx = metaTx
-	.pipe(
-		op.mergeMap((metaTx) => {
-
-			//注：このトランザクションがなくても成立するがトリガーが反応しないため明示的に作成
-			const optinTx = nem.TransferTransaction.create(
-				nem.Deadline.create(),
-				alicePublicAccount.address,[],
-				nem.PlainMessage.create(''),
-				nem.NetworkType.TEST_NET
-			);
-
-			const aggregateTx = nem.AggregateTransaction.createBonded(
-				nem.Deadline.create(),
-				[
-					metaTx.toAggregate(alicePublicAccount),
-					optinTx.toAggregate(targetPublicAccount)
-				],
-				nem.NetworkType.TEST_NET,[],
-				nem.UInt64.fromUint(2000000)
-			);
-			const signedTx = aliceQR.account.sign(aggregateTx, GENERATION_HASH);
-			return rxjs.of(signedTx);
-
-		})
-	).subscribe(
-		x=> {
-
-			executeTx(x,targetPublicAccount,aliceQR.account,function(){
-				alert("認証完了しました");
-				(async() => {
-					const bh = await blockHttp.getBlockByHeight(tx.transactionInfo.height).toPromise();
-					$('#confirmed_verify ul')
-					.append('<li><b>認証日時:</b> <span>' + dispTimeStamp(bh.timestamp.compact() + SYMBOL_EPOCH * 1000) + '</span></li>');
-				})();
-			});
-		}
-	);
-/*
-	signedAggregateHashLock = signedAggregateTx.pipe(
-		op.mergeMap((signedAggregateTx) => {
-			const hashLockTx = nem.HashLockTransaction.create(
-				nem.Deadline.create(),
-				new nem.Mosaic(new nem.MosaicId(CURRENCY),nem.UInt64.fromUint(10000000)),
-				nem.UInt64.fromUint(480),
-				signedAggregateTx,
-				nem.NetworkType.TEST_NET,
-				nem.UInt64.fromUint(2000000)
-			);
-			const signedTx = aliceQR.account.sign(hashLockTx, GENERATION_HASH);
-			const signedAggregateHashLock =  {
-				aggregate: signedAggregateTx,
-				hashLock: signedTx,
-			};
-			delete aliceQR;
-			console.log('Aggregate Transaction Hash:', signedAggregateTx.hash + '\n');
-			console.log('HashLock Transaction Hash:', signedTx.hash + '\n');
-			console.log(NODE + "/transaction/" + signedAggregateTx.hash + "/status");
-			console.log(NODE + "/transaction/" + signedTx.hash + "/status");
-
-
-			return rxjs.of(signedAggregateHashLock);
-		})
-	);
-*/
-
-/*
-	const bondedListener = new nem.Listener(wsEndpoint, WebSocket);
-	bondedListener.open().then(() => {
-
-		signedAggregateHashLock.pipe(
-			op.mergeMap((signedAggregateHashLock) =>
-				transactionService.announceHashLockAggregateBonded(
-					signedAggregateHashLock.hashLock,
-					signedAggregateHashLock.aggregate,
-					bondedListener),
-			),
-		).subscribe(aggTx => {
-
-			bondedListener.confirmed(alicePublicAccount.address)
-			.pipe(
-				op.filter(tx => tx.transactionInfo !== undefined && tx.transactionInfo.hash === aggTx.transactionInfo.hash)
-			)
-			.subscribe(tx => {
-				alert("認証完了しました");
-				(async() => {
-					const bh = await blockHttp.getBlockByHeight(tx.transactionInfo.height).toPromise();
-					$('#confirmed_verify ul')
-					.append('<li><b>認証日時:</b> <span>' + dispTimeStamp(bh.timestamp.compact() + SYMBOL_EPOCH * 1000) + '</span></li>');
-				})();
-			},err => console.error(err));
-			console.log('Transaction confirmed');
-		},
-		(err) => console.log(err),
-		() => bondedListener.close());
+		executeTx(tx,targetPublicAccount,aliceQR.account,async function(){
+			const bh = await blockHttp.getBlockByHeight(tx.transactionInfo.height).toPromise();
+			$('#confirmed_verify ul')
+			.append('<li><b>認証日時:</b> <span>' + dispTimeStamp(bh.timestamp.compact() + SYMBOL_EPOCH * 1000) + '</span></li>');
+		});
 	});
-	*/
+	
 }
 
 //譲渡
-async function handoverHanco(targetPulicKey){
+function handoverHanco(targetPulicKey){
 
 	const targetPublicAccount = nem.PublicAccount.createFromPublicKey(targetPulicKey,nem.NetworkType.TEST_NET)
 	const aliceQR = qr.AccountQR.fromJSON(aliceJSON,window.prompt("パスフレーズを入力してください", ""));
@@ -637,7 +544,15 @@ async function handoverHanco(targetPulicKey){
 		);
 	}
 
-	//注：このトランザクションがなくても成立するがリスナーが反応しないため明示的に作成
+	executeTx(msigTx,targetPublicAccount,aliceQR.account,function(){
+		alert("譲渡完了しました");
+	});
+}
+
+//アグリゲートボンデッドトランザクション
+function executeTx(metaTx,targetPublicAccount,signer,callback){
+
+	//注：このトランザクションがなくても成立するがトリガーが反応しないため明示的に作成 issue済み。いずれ削除
 	const optinTx = nem.TransferTransaction.create(
 		nem.Deadline.create(),
 		alicePublicAccount.address,[],
@@ -648,104 +563,50 @@ async function handoverHanco(targetPulicKey){
 	const aggregateTx = nem.AggregateTransaction.createBonded(
 		nem.Deadline.create(),
 		[
-			msigTx.toAggregate(alicePublicAccount),
-			optinTx.toAggregate(targetPublicAccount) //carol->bob
+			metaTx.toAggregate(alicePublicAccount),
+			optinTx.toAggregate(targetPublicAccount)
 		],
 		nem.NetworkType.TEST_NET,[],
-		nem.UInt64.fromUint(1000000)
+		nem.UInt64.fromUint(2000000)
+	);
+	const signedAggregateTx = signer.sign(aggregateTx, GENERATION_HASH);
+
+	const hashLockTx = nem.HashLockTransaction.create(
+		nem.Deadline.create(),
+		new nem.Mosaic(new nem.MosaicId(CURRENCY),nem.UInt64.fromUint(10000000)),
+		nem.UInt64.fromUint(480),
+		signedAggregateTx,
+		nem.NetworkType.TEST_NET,
+		nem.UInt64.fromUint(2000000)
 	);
 
-	const signedAggregateTx = aliceQR.account.sign(aggregateTx, GENERATION_HASH);
-/*
-	signedAggregateHashLock = rxjs.of(signedAggregateTx)
-	.pipe(
-		op.mergeMap((signedAggregateTx) => {
-			const hashLockTx = nem.HashLockTransaction.create(
-				nem.Deadline.create(),
-				new nem.Mosaic(new nem.MosaicId(CURRENCY),nem.UInt64.fromUint(10000000)),
-				nem.UInt64.fromUint(480),
-				signedAggregateTx,
-				nem.NetworkType.TEST_NET,
-				nem.UInt64.fromUint(2000000)
-			);
-
-			const aggregateTx = nem.AggregateTransaction.createComplete(
-				nem.Deadline.create(),
-				[hashLockTx.toAggregate(alicePublicAccount)],
-				nem.NetworkType.TEST_NET,[],
-				nem.UInt64.fromUint(100000)
-			);
-
-			const signedTx = signer.sign(aggregateTx, GENERATION_HASH);
-			delete signer;
-
-			const signedAggregateHashLock =  {
-				aggregate: signedAggregateTx,
-				hashLock: signedTx,
-			};
-			console.log('Aggregate Transaction Hash:', signedAggregateTx.hash + '\n');
-			console.log('HashLock Transaction Hash:', signedTx.hash + '\n');
-			console.log(NODE + "/transaction/" + signedAggregateTx.hash + "/status");
-			console.log(NODE + "/transaction/" + signedTx.hash + "/status");
-
-			return rxjs.of(signedAggregateHashLock);
-		})
-	);
-*/
-
-
-	executeTx(signedAggregateTx,targetPublicAccount,aliceQR.account,function(){
-		alert("譲渡完了しました");
-	});
-}
-
-//アグリゲートボンデッドトランザクション
-function executeTx(signedAggregateTx,targetPublicAccount,signer,callback){
-
-	signedAggregateHashLock = rxjs.of(signedAggregateTx)
-	.pipe(
-		op.mergeMap((signedAggregateTx) => {
-			const hashLockTx = nem.HashLockTransaction.create(
-				nem.Deadline.create(),
-				new nem.Mosaic(new nem.MosaicId(CURRENCY),nem.UInt64.fromUint(10000000)),
-				nem.UInt64.fromUint(480),
-				signedAggregateTx,
-				nem.NetworkType.TEST_NET,
-				nem.UInt64.fromUint(2000000)
-			);
-
-			const aggregateTx = nem.AggregateTransaction.createComplete(
-				nem.Deadline.create(),
-				[hashLockTx.toAggregate(alicePublicAccount)],
-				nem.NetworkType.TEST_NET,[],
-				nem.UInt64.fromUint(100000)
-			);
-
-			const signedTx = signer.sign(aggregateTx, GENERATION_HASH);
-			delete signer;
-
-			const signedAggregateHashLock =  {
-				aggregate: signedAggregateTx,
-				hashLock: signedTx,
-			};
-			console.log('Aggregate Transaction Hash:', signedAggregateTx.hash + '\n');
-			console.log('HashLock Transaction Hash:', signedTx.hash + '\n');
-			console.log(NODE + "/transaction/" + signedAggregateTx.hash + "/status");
-			console.log(NODE + "/transaction/" + signedTx.hash + "/status");
-
-			return rxjs.of(signedAggregateHashLock);
-		})
+	const aggregateLockTx = nem.AggregateTransaction.createComplete(
+		nem.Deadline.create(),
+		[hashLockTx.toAggregate(alicePublicAccount)],
+		nem.NetworkType.TEST_NET,[],
+		nem.UInt64.fromUint(100000)
 	);
 
-	signedAggregateHashLock.pipe(
-		op.mergeMap((signedAggregateHashLock) =>
-			transactionService.announceHashLockAggregateBonded(
-				signedAggregateHashLock.hashLock,
-				signedAggregateHashLock.aggregate,
-				listener),
-		),
+	const signedLockTx = signer.sign(aggregateLockTx, GENERATION_HASH);
+	delete signer;
+
+	const signedAggregateHashLock =  {
+		aggregate: signedAggregateTx,
+		hashLock: signedLockTx,
+	};
+	console.log('Aggregate Transaction Hash:', signedAggregateTx.hash + '\n');
+	console.log('HashLock Transaction Hash:', signedLockTx.hash + '\n');
+	console.log(NODE + "/transaction/" + signedAggregateTx.hash + "/status");
+	console.log(NODE + "/transaction/" + signedLockTx.hash + "/status");
+
+	transactionService.announceHashLockAggregateBonded(
+		signedAggregateHashLock.hashLock,
+		signedAggregateHashLock.aggregate,
+		listener
+
 	).subscribe(aggTx => {
-		//譲渡済みのため、譲渡先のアカウントを監視する//
+
+		//targetアカウントを監視する//
 		const bondedListener = new nem.Listener(wsEndpoint, WebSocket);
 		bondedListener.open().then(() => {
 
@@ -859,7 +720,7 @@ $("#modal_ok").click(function(){
 			$('#confirmed_verify ul')
 			.append('<li><a target="_blank" href="' + EXPLORER + '/transaction/' + tx.transactionInfo.hash + '">エクスプローラーで確認</a></li>')
 			.append('<li><b>口座ID:</b> <span id="confirmed_verify_publicKey">'    + tx.signer.publicKey	 + '</span></li>')
-			.append('<li><b>TX hash:</b> <span>'	+ tx.transactionInfo.hash + '</span></li>')
+			.append('<li><b>TX hash:</b> <span id="confirmed_verify_hash">'	+ tx.transactionInfo.hash + '</span></li>')
 			.append('<li><b>署名テキスト:</b> <span>' + tx.innerTransactions[0].message.payload		+ '</span></li>')
 			.append('<li><b>タイムスタンプ:</b> <span>' + dispTimeStamp(bh.timestamp.compact()	+ SYMBOL_EPOCH * 1000) + '</span></li>');
 		})();
