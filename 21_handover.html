@@ -519,7 +519,7 @@ async function addAuth(){
 			delete aliceQR;
 		});
 	});
-	
+
 }
 
 //譲渡
@@ -765,6 +765,8 @@ $("#modal_ok").click(function(){
 					.append('<button type="button" publicKey="'+ item.publicKey  +'" data-toggle="msig" class="button-msig list-group-item list-group-item-action">' +item.publicKey +'</button>')
 				}
 				$('#modal-msig').modal('show');
+			}else{
+				showAccountQR();
 			}
 		},
 		err=>{
