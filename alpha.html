@@ -22,7 +22,7 @@
 
 	<div class="collapse" id="div2">
 		<div><img id="hanco"></div>
-		<div><button type="button" id="faucet" class="btn btn-primary">インク充填</button>　<label id="amount">0 XYM</label></div>
+		<div><button type="button" id="button_faucet" class="btn btn-primary">インク充填</button>　<label id="amount">0 XYM</label></div>
 	</div>
 
 	<div class="collapse" id="div3">
@@ -69,7 +69,7 @@
 
 			<!-- 承認 -->
 			<div id="tab_confirm" class="tab-pane">
-				<div><b>申請者情報:</b> <span id="outputData_confirm" class="text-break"></span></div>
+				<div><b>申請者情報:</b> <span id="scan_data_confirm" class="text-break"></span></div>
 				<div class="collapse" id="div_text_confirm">
 					<label><b>承認テキスト:</b></label>
 					<input type="text" id="text_confirm" class="form-control">
@@ -91,14 +91,14 @@
 
 			<!-- 検証 -->
 			<div id="tab_verify" class="tab-pane">
-				<div><b>承認者署名ID:</b> <span id="outputData_verify" class="text-break"></span></div>
+				<div><b>承認者署名ID:</b> <span id="scan_data_verify" class="text-break"></span></div>
 				<div id="confirmed_verify"><ul></ul></div>
 				<div><button type="button" id="button_auth" class="btn btn-primary">認証</button></div>
 			</div>
 
 			<!-- 譲渡 -->
 			<div id="tab_handover" class="tab-pane">
-				<div><b>譲渡先ID:</b> <span id="outputData_handover" class="text-break"></span></div>
+				<div><b>譲渡先ID:</b> <span id="scan_data_handover" class="text-break"></span></div>
 				<!-- <div id="confirmed_verify"><ul></ul></div> -->
 				<div><button type="button" id="button_handover" class="btn btn-primary">譲渡</button></div>
 			</div>
@@ -121,12 +121,12 @@
 				<div class="input-group">
 					<label class="input-group-btn">
 						<span class="btn btn-primary">
-							画像でスキャン<input id="image" type="file" style="display:none">
+							画像でスキャン<input id="file_image" type="file" style="display:none">
 						</span>
 					</label>
 				</div>
 				<canvas id="canvas" hidden></canvas>
-				<div id="outputData" class="text-break"></div>
+				<div id="scan_data" class="text-break"></div>
 			</div>
 			<div class="modal-footer">
 				<button type="button" class="btn btn-default" data-dismiss="modal">キャンセル</button>
@@ -168,7 +168,7 @@
 
 <script src="jsQR.js"></script>
 <script src="symbol-qr-library-0.9.1.js"></script>
-<script src="symbol-sdk-0.19.0.js"></script>
+<script src="symbol-sdk-0.19.2.js"></script>
 <script src="xembook-tools.js"></script>
 <script>$(function() {
 
@@ -204,10 +204,12 @@ const blockHttp = new nem.BlockHttp(NODE);
 const receiptHttp = new nem.ReceiptHttp(NODE);
 const accountHttp = new nem.AccountHttp(NODE);
 const multisigHttp = new nem.MultisigHttp(NODE);
+const namespaceHttp = new nem.NamespaceHttp(NODE);
 const metaService = new nem.MetadataTransactionService(metaHttp);
 const transactionService = new nem.TransactionService(txHttp, receiptHttp);
-const wsEndpoint = NODE.replace('http', 'ws');
-const listener = new nem.Listener(wsEndpoint, WebSocket);
+const wsEndpoint = NODE.replace('http', 'ws') + "/ws";
+const listener = new nem.Listener(wsEndpoint,namespaceHttp,WebSocket);
+//const listener = new nem.RepositoryFactoryHttp(wsEndpoint ).createListener()
 listener.open().then(() => {
 	setInterval(function(){listener.newBlock()}, 30000);
 });
@@ -218,7 +220,7 @@ var alicePublicAccount;//操作対象アカウント（マルチシグの場合�
 var aliceJSON;//暗号化済み署名者アカウント　変数名は変える必要あり
 var canvasElement;
 var canvas;
-var outputData;
+var scanData;
 var currentTab;
 var isMovieScanning = false;
 var video = document.createElement("video");
@@ -267,7 +269,7 @@ function startVideo(divId){
 	isMovieScanning = true;
 	canvasElement = document.getElementById("canvas");
 	canvas		  = canvasElement.getContext("2d");
-	outputData	  = document.getElementById("outputData");
+	scanData	  = document.getElementById("scan_data");
 
 	navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } }).then(function(stream) {
 		video.srcObject = stream;
@@ -310,7 +312,7 @@ function scanFileImage(){
 
 	stopVideo();
 
-	const fileList = document.getElementById("image").files;
+	const fileList = document.getElementById("file_image").files;
 	const reader = new FileReader();
 	const file = fileList[0];
 	if (file.type == 'image/jpeg' || file.type == 'image/png'){
@@ -333,7 +335,7 @@ function scanFileImage(){
 }
 ////////////////////////////////////////////////////////
 
-
+//選択中はんこの完了トランザクション検知リスナー
 const aliceSignedTxConfirmed = function(signedTx){
 
 	return listener.confirmed(alicePublicAccount.address).pipe(
@@ -419,6 +421,7 @@ function showAccountQR(x){
 }
 
 //押印（自署・承認）
+//confirmedAddress:承認先
 function signByHanco(confirmedAddress,divId,message){
 
 	const tx = nem.TransferTransaction.create(
@@ -512,14 +515,13 @@ async function addAuth(){
 
 	).subscribe(tx=>{
 
-		executeTx(tx,targetPublicAccount,aliceQR.account,async function(){
+		exeAggBondedTx(tx,targetPublicAccount,aliceQR.account,async function(){
 			const bh = await blockHttp.getBlockByHeight(tx.transactionInfo.height).toPromise();
 			$('#confirmed_verify ul')
 			.append('<li><b>認証日時:</b> <span>' + dispTimeStamp(bh.timestamp.compact() + SYMBOL_EPOCH * 1000) + '</span></li>');
 			delete aliceQR;
 		});
 	});
-	
 }
 
 //譲渡
@@ -545,14 +547,14 @@ function handoverHanco(targetPulicKey){
 		);
 	}
 
-	executeTx(msigTx,targetPublicAccount,aliceQR.account,function(){
+	exeAggBondedTx(msigTx,targetPublicAccount,aliceQR.account,function(){
 		alert("譲渡完了しました");
 		delete aliceQR;
 	});
 }
 
 //アグリゲートボンデッドトランザクション
-function executeTx(metaTx,targetPublicAccount,signer,callback){
+function exeAggBondedTx(metaTx,targetPublicAccount,signer,callback){
 
 	//注：このトランザクションがなくても成立するがトリガーが反応しないため明示的に作成 issue済み。いずれ削除
 	const optinTx = nem.TransferTransaction.create(
@@ -673,10 +675,10 @@ $(".nav-item a").click( function(e){
 //QRコードスキャン完了時
 function resultQR(data){
 
-	if(currentTab == "tab_confirm"){	  outputData.innerText = data;//承認
-	}else if(currentTab == "tab_verify"){ outputData.innerText = JSON.parse(data).data.hash;//検証
-	}else if(currentTab == "tab_handover"){outputData.innerText = JSON.parse(data).data.publicKey;//譲渡
-	}else if(currentTab == "tab_"){ 	  outputData.innerText = data;//復元
+	if(currentTab == "tab_confirm"){	  scanData.innerText = data;//承認
+	}else if(currentTab == "tab_verify"){ scanData.innerText = JSON.parse(data).data.hash;//検証
+	}else if(currentTab == "tab_handover"){scanData.innerText = JSON.parse(data).data.publicKey;//譲渡
+	}else if(currentTab == "tab_"){ 	  scanData.innerText = data;//復元
 	}
 }
 
@@ -685,8 +687,8 @@ $("#modal_ok").click(function(){
 
 	if(currentTab == "tab_confirm"){ //承認
 
-		$('#outputData_confirm').text(outputData.innerText);
-		const jsonData = JSON.parse(outputData.innerText).data;
+		$('#scan_data_confirm').text(scanData.innerText);
+		const jsonData = JSON.parse(scanData.innerText).data;
 		if(jsonData.name == 'xemhanco.tx.1'){
 
 			$('#div_text_confirm').collapse('hide');
@@ -703,7 +705,7 @@ $("#modal_ok").click(function(){
 	}else if(currentTab == "tab_verify"){ //検証
 
 		(async() => {
-			const tx = await txHttp.getTransaction(outputData.innerText).toPromise();
+			const tx = await txHttp.getTransaction(scanData.innerText).toPromise();
 			const bh = await blockHttp.getBlockByHeight(tx.transactionInfo.height).toPromise();
 			const key = nem.KeyGenerator.generateUInt64Key(tx.transactionInfo.hash);
 			await metaHttp.getAccountMetadataByKeyAndSender(tx.signer.address,key.toHex(),tx.signer.publicKey)
@@ -726,12 +728,12 @@ $("#modal_ok").click(function(){
 
 	}else if(currentTab == "tab_handover"){ //譲渡
 
-		$('#outputData_handover').text(outputData.innerText);
+		$('#scan_data_handover').text(scanData.innerText);
 
 	}else if(currentTab == "tab_"){ //復元
 
 		try{
-			const aliceQR = qr.AccountQR.fromJSON(outputData.innerText,$("#pass").val());
+			const aliceQR = qr.AccountQR.fromJSON(scanData.innerText,$("#pass").val());
 			alicePublicAccount = aliceQR.account.publicAccount;
 			setCosignerListener(alicePublicAccount);
 			aliceQR.toBase64().subscribe(x => {
@@ -743,32 +745,41 @@ $("#modal_ok").click(function(){
 			delete aliceQR;
 		}
 		catch (e) {
-
-			if(e.toString().indexOf("Could not parse encrypted account information.") > 0){
-				alert("NEMはんこの復元に失敗しました")
-			}
+			alert(e);
 			console.log(e);
+			return false;
 		}
 
+		const appendList = function(publicKey,name){
+			$('#list-msig ul')
+			.append('<button type="button" publicKey="'
+			+ publicKey
+			+'" data-toggle="msig" class="button-msig list-group-item list-group-item-action">'
+			+ name
+			+ '</button>'
+			);
+		};
 		//マルチシグ保有調査
 		multisigHttp.getMultisigAccountInfo(alicePublicAccount.address)
 		.subscribe(_=>{
 
 			if(_.multisigAccounts.length > 0){
 
-				$('#list-msig ul')
-			 	.append('<button type="button" publicKey="'+ alicePublicAccount.publicKey  +'" data-toggle="msig" class="button-msig list-group-item list-group-item-action">マイはんこ</button>')
-
+				appendList(alicePublicAccount.publicKey,"マイはんこ");
 				for (item of _.multisigAccounts) {
-
-					$('#list-msig ul')
-					.append('<button type="button" publicKey="'+ item.publicKey  +'" data-toggle="msig" class="button-msig list-group-item list-group-item-action">' +item.publicKey +'</button>')
+					appendList(item.publicKey,item.publicKey);
 				}
 				$('#modal-msig').modal('show');
+			}else{
+				showAccountQR();
 			}
 		},
 		err=>{
-			showAccountQR();
+			if(err.toString().indexOf("ResourceNotFound")>0){
+				showAccountQR();
+			}else{
+				alert(err);
+			}
 		},
 		()=>$('#div3').collapse('show'));
 	}
@@ -797,7 +808,7 @@ $("#create").click(function(){
 $("#cancel_contact").click(function(){ cancelHanco();}); //無効化：はんこ
 $("#cancel_confirm").click(function(){ //無効化：承認
 
-	const jsonData = JSON.parse($('#outputData_confirm').text()).data;
+	const jsonData = JSON.parse($('#scan_data_confirm').text()).data;
 	if(jsonData.name == 'xemhanco.tx.1'){
 
 		cancelSign(jsonData.hash);
@@ -816,8 +827,8 @@ $('#modal-qrscan').on('hide.bs.modal', function (e) {
 
 	stopVideo();
 	canvas.clearRect(0, 0, canvasElement.width, canvasElement.height);
-	$('#image').val("");
-	outputData.innerText = "";
+	$('#file_image').val("");
+	scanData.innerText = "";
 })
 
 
@@ -827,25 +838,36 @@ $('#download_contact').click(function(e){
 	contactQR.toBase64().subscribe(x=>{this.href = x});
 });
 
-$('#button_selfsign').click(function(e) {signByHanco(alicePublicAccount.address,"selfsign",$("#text_selfsign").val())});//自署：押印
-$('#button_confirm' ).click(function(e) { //承認：押印
+//自署:押印
+$('#button_selfsign').click(function(e) {
 
-	const jsonData = JSON.parse($('#outputData_confirm').text()).data;
+	//自分（マルチシグ選択中）のアカウントに対して承認
+	//メッセージは＃text_selfsignで指定
+	signByHanco(alicePublicAccount.address,"selfsign",$("#text_selfsign").val())});
+
+//承認：押印
+$('#button_confirm' ).click(function(e) {
+
+	const jsonData = JSON.parse($('#scan_data_confirm').text()).data;
 	if(jsonData.name == 'xemhanco.contact.1'){
 
+		//申請アカウントに対して承認
+		//メッセージは＃text_confirmで指定
 		const confirmedAccount = nem.PublicAccount.createFromPublicKey(jsonData.publicKey,nem.NetworkType.TEST_NET);
 		signByHanco(confirmedAccount.address,"confirm",$("#text_confirm").val())
 
 	}else if(jsonData.name == 'xemhanco.tx.1'){
 
+		//トランザクションに対して承認
+		//メッセージはtx hash値固定
 		txHttp.getTransaction(jsonData.hash).subscribe(x=>{
 			signByHanco(x.signer.address,"confirm",jsonData.hash)
 		});
+
 	}else{
 		alert("承認できないデータです");
 	}
 });
-
 
 //譲渡：マルチシグ選択
 $("#list-msig").on("click",".button-msig", function() {
@@ -855,12 +877,12 @@ $("#list-msig").on("click",".button-msig", function() {
 	showAccountQR();
 });
 
-$('#image'		  ).change(function(e) {scanFileImage();});
-$('#file_selfsign').change(function(e) {setFileHash('selfsign')});
-$('#file_confirm' ).change(function(e) {setFileHash('confirm')});
-$("#button_auth").click(function(){addAuth()});
-$("#button_handover").click(function(){handoverHanco($('#outputData_handover').text())});
-$("#faucet").click(function(){window.open(FAUCET + "/?recipient=" + alicePublicAccount.address.plain() + "&amount=20","_blank")});
+$('#file_image'		).change(function(e){scanFileImage();});
+$('#file_confirm'	).change(function(e){setFileHash('confirm')});
+$('#file_selfsign'	).change(function(e){setFileHash('selfsign')});
+$("#button_auth"	).click(function(){addAuth()});
+$("#button_handover").click(function(){handoverHanco($('#scan_data_handover').text())});
+$("#button_faucet"			).click(function(){window.open(FAUCET + "/?recipient=" + alicePublicAccount.address.plain() + "&amount=20","_blank")});
 $('#div1').collapse('show');//アプリケーション開始
 })</script>
 </body>
