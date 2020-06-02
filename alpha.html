@@ -22,7 +22,13 @@
 
 	<div class="collapse" id="div2">
 		<div><img id="hanco"></div>
-		<div><button type="button" id="button_faucet" class="btn btn-primary">インク充填</button>　<label id="amount">0 XYM</label></div>
+		<div>
+			<button type="button" id="button_faucet" class="btn btn-primary">
+				<span id="spinner_faucet" class="collapse spinner-border spinner-border-sm" role="status"></span>
+				インク充填
+			</button>
+
+		<label id="amount">0 XYM</label></div>
 	</div>
 
 	<div class="collapse" id="div3">
@@ -63,7 +69,10 @@
 						</span>
 					</label>
 				</div>
-				<div><button type="button" id="button_selfsign" class="btn btn-primary">押印</button></div>
+				<div><button type="button" id="button_selfsign" class="btn btn-primary">
+					<span id="spinner_selfsign" class="collapse spinner-border spinner-border-sm" role="status"></span>
+
+					押印</button></div>
 				<div id="confirmed_selfsign"><ul></ul></div>
 			</div>
 
@@ -82,7 +91,11 @@
 					</div>
 				</div>
 
-				<div><button type="button" id="button_confirm" class="btn btn-primary">押印</button></div>
+				<div>
+					<button type="button" id="button_confirm" class="btn btn-primary">
+						<span id="spinner_confirm" class="collapse spinner-border spinner-border-sm" role="status"></span>
+						押印
+					</button></div>
 				<div class="collapse" id="div_cancel_confirm">
 					<button type="button" id="cancel_confirm" class="btn btn-primary">キャンセル</button>
 				</div>
@@ -93,14 +106,23 @@
 			<div id="tab_verify" class="tab-pane">
 				<div><b>承認者署名ID:</b> <span id="scan_data_verify" class="text-break"></span></div>
 				<div id="confirmed_verify"><ul></ul></div>
-				<div><button type="button" id="button_auth" class="btn btn-primary">認証</button></div>
+				<div>
+					<button type="button" id="button_auth" class="btn btn-primary">
+						<span id="spinner_auth" class="collapse spinner-border spinner-border-sm" role="status"></span>
+						認証
+					</button>
+				</div>
 			</div>
 
 			<!-- 譲渡 -->
 			<div id="tab_handover" class="tab-pane">
 				<div><b>譲渡先ID:</b> <span id="scan_data_handover" class="text-break"></span></div>
 				<!-- <div id="confirmed_verify"><ul></ul></div> -->
-				<div><button type="button" id="button_handover" class="btn btn-primary">譲渡</button></div>
+				<div>
+					<button type="button" id="button_handover" class="btn btn-primary">
+						<span id="spinner_handover" class="collapse spinner-border spinner-border-sm" role="status"></span>
+						譲渡
+					</button></div>
 			</div>
 		</div>
 	</div><!-- div3 -->
@@ -336,10 +358,10 @@ function scanFileImage(){
 ////////////////////////////////////////////////////////
 
 //選択中はんこの完了トランザクション検知リスナー
-const aliceSignedTxConfirmed = function(signedTx){
+const aliceSignedTxConfirmed = function(signedTxHash){
 
 	return listener.confirmed(alicePublicAccount.address).pipe(
-		op.filter((tx) => tx.transactionInfo !== undefined && tx.transactionInfo.hash === signedTx.hash)
+		op.filter((tx) => tx.transactionInfo !== undefined && tx.transactionInfo.hash === signedTxHash)
 	)
 }
 
@@ -361,7 +383,10 @@ function setCosignerListener(cosignerAccount){
 					hash:_.parentHash
 				});
 			}),
-			op.mergeMap(_=>aliceSignedTxConfirmed(_))
+			op.mergeMap(_=>{
+				console.log(_);
+				return aliceSignedTxConfirmed(_.hash);
+			})
 		)
 		.subscribe(
 			x => alert("署名完了しました"),
@@ -391,6 +416,7 @@ function showAccountQR(x){
 		.subscribe(_=>{
 			$("#amount").text(dispAmount(_.amount.toString(),6) + " XYM");
 			$('#div3').collapse('show');
+			$('#spinner_faucet').collapse('hide')
 		},err => console.error(err));
 	}
 
@@ -401,8 +427,25 @@ function showAccountQR(x){
 		op.mergeMap(x=>accountHttp.getAccountInfo(alicePublicAccount.address)),
 	);
 
+
 	accountSubscribe(aliceHttp);
 	accountSubscribe(aliceListener);
+
+	listener.unconfirmedAdded(alicePublicAccount.address)
+	.pipe(
+		op.filter((tx) => tx.mosaics !== undefined),
+		op.mergeMap(_=>{
+			console.log(_);
+			return _.mosaics;
+		}),
+		op.filter(_ => _.id.toHex() === CURRENCY)
+	)
+	.subscribe(_=> {
+		console.log("unconfirmed")
+		$('#spinner_faucet').collapse('show')
+	},err => console.error(err));
+
+
 
 	const contactQR = new qr.ContactQR("xemhanco.contact.1",alicePublicAccount);
 	contactQR.toBase64().subscribe(x => {
@@ -442,25 +485,51 @@ function signByHanco(confirmedAddress,divId,message){
 	const aliceQR = qr.AccountQR.fromJSON(aliceJSON,window.prompt("パスフレーズを入力してください", ""));
 	const signedTx = aliceQR.account.sign(aggregateTx,GENERATION_HASH);
 	delete aliceQR;
+
+	$('#spinner_'+divId).collapse('show');
+
+	transactionService.announce(signedTx, listener)
+	.subscribe(_=> {
+		$('#spinner_'+divId).collapse('hide');
+  		$('#confirmed_' + divId + ' ul')
+  		.append('<li><a target="_blank" href="' + EXPLORER + '/transaction/' + signedTx.hash + '">エクスプローラーで確認</a></li>');
+
+  		const object = {"name":"xemhanco.tx.1","hash": signedTx.hash};
+  		var obj = qr.QRCodeGenerator.createExportObject(object);
+  		obj.generationHash = "";
+  		obj.toBase64().subscribe(x=>{
+
+  			$('#confirmed_' + divId + ' ul')
+  			.append('<li><img src=' + x + '></li>');
+  		});
+    },
+    (err) => {
+        console.error(err.message) // ex. Failure_Core_Insufficient_Balance
+    })
+
+
+/*
 	const txHttp = new nem.TransactionHttp(NODE);
 	txHttp.announce(signedTx)
-	.subscribe(_ => {
+	.pipe(
+		op.mergeMap(_=> aliceSignedTxConfirmed(signedTx))
+	)
+	.subscribe(function(_){
 
-		aliceSignedTxConfirmed(signedTx)
-		.subscribe(function(_){
+		$('#spinner_'+divId).collapse('hide');
+		$('#confirmed_' + divId + ' ul')
+		.append('<li><a target="_blank" href="' + EXPLORER + '/transaction/' + signedTx.hash + '">エクスプローラーで確認</a></li>');
+
+		const object = {"name":"xemhanco.tx.1","hash": signedTx.hash};
+		var obj = qr.QRCodeGenerator.createExportObject(object);
+		obj.generationHash = "";
+		obj.toBase64().subscribe(x=>{
+
 			$('#confirmed_' + divId + ' ul')
-			.append('<li><a target="_blank" href="' + EXPLORER + '/transaction/' + signedTx.hash + '">エクスプローラーで確認</a></li>');
-
-			const object = {"name":"xemhanco.tx.1","hash": signedTx.hash};
-			var obj = qr.QRCodeGenerator.createExportObject(object);
-			obj.generationHash = "";
-			obj.toBase64().subscribe(x=>{
-
-				$('#confirmed_' + divId + ' ul')
-				.append('<li><img src=' + x + '></li>');
-			});
-		},err => console.error(err));
-	}, err => console.error(err));
+			.append('<li><img src=' + x + '></li>');
+		});
+	},err => console.error(err));
+	*/
 	console.log(NODE + "/transaction/" + signedTx.hash + "/status");
 }
 
@@ -515,7 +584,11 @@ async function addAuth(){
 
 	).subscribe(tx=>{
 
+		$('#spinner_auth').collapse('show');
+
 		exeAggBondedTx(tx,targetPublicAccount,aliceQR.account,async function(){
+
+			$('#spinner_auth').collapse('hide');
 			const bh = await blockHttp.getBlockByHeight(tx.transactionInfo.height).toPromise();
 			$('#confirmed_verify ul')
 			.append('<li><b>認証日時:</b> <span>' + dispTimeStamp(bh.timestamp.compact() + SYMBOL_EPOCH * 1000) + '</span></li>');
@@ -547,7 +620,10 @@ function handoverHanco(targetPulicKey){
 		);
 	}
 
+	$('#spinner_handover').collapse('show');
 	exeAggBondedTx(msigTx,targetPublicAccount,aliceQR.account,function(){
+
+		$('#spinner_handover').collapse('hide');
 		alert("譲渡完了しました");
 		delete aliceQR;
 	});
@@ -611,7 +687,7 @@ function exeAggBondedTx(metaTx,targetPublicAccount,signer,callback){
 	).subscribe(aggTx => {
 
 		//targetアカウントを監視する//
-		const bondedListener = new nem.Listener(wsEndpoint, WebSocket);
+		const bondedListener = new nem.Listener(wsEndpoint,namespaceHttp, WebSocket);
 		bondedListener.open().then(() => {
 
 			bondedListener.confirmed(targetPublicAccount.address)
@@ -636,7 +712,7 @@ function cancelSign(hash){addMeta(_ => {})} //トランザクションキャン�
 function cancelHanco(){ ////はんこキャンセル
 	addMeta(signedTx => {
 
-		aliceSignedTxConfirmed(signedTx)
+		aliceSignedTxConfirmed(signedTx.hash)
 		.subscribe(function(_){
 			$('#disabled_contact').collapse('show');
 
