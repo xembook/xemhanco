@@ -511,7 +511,6 @@ function signByHanco(confirmedAddress,divId,message){
 	)
 	.subscribe(function(_){
 
-		$('#spinner_'+divId).collapse('hide');
 		$('#confirmed_' + divId + ' ul')
 		.append('<li><a target="_blank" href="' + EXPLORER + '/transaction/' + signedTx.hash + '">エクスプローラーで確認</a></li>');
 
@@ -526,7 +525,9 @@ function signByHanco(confirmedAddress,divId,message){
 	},err => {
 		alert(err);
 		console.error(err)
-	});
+
+	},() => $('#spinner_'+divId).collapse('hide')
+	);
 
 	console.log(NODE + "/transaction/" + signedTx.hash + "/status");
 }
