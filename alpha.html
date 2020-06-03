@@ -232,10 +232,14 @@ const transactionService = new nem.TransactionService(txHttp, receiptHttp);
 
 const wsEndpoint = NODE.replace('http', 'ws') + "/ws";
 const listener = new nem.Listener(wsEndpoint,nsHttp,WebSocket);
-//const listener = new nem.RepositoryFactoryHttp(wsEndpoint ).createListener()
 listener.open().then(() => {
 	setInterval(function(){listener.newBlock()}, 30000);
 });
+
+//アカウントの種類
+//署名アカウント（1つだけ。連署アカウント）
+//操作アカウント（マルチシグアカウント）
+//操作対象アカウント（承認・認証等オプトイン要求先アカウント）
 
 
 //グローバル変数
@@ -283,7 +287,6 @@ function getCodeInfo(src){
 		drawLine(code.location.bottomRightCorner	, code.location.bottomLeftCorner	,"#FF3B58");
 		drawLine(code.location.bottomLeftCorner		, code.location.topLeftCorner		,"#FF3B58");
 		scanData.innerText = code.data;
-//		resultQR(code.data);
 	}
 }
 
@@ -362,11 +365,6 @@ function scanFileImage(){
 //選択中はんこの完了トランザクション検知リスナー
 const aliceSignedTxConfirmed = function(signedTxHash){
 
-//	listener.status(alicePublicAccount.address,signedTxHash)
-//	return listener.confirmed(alicePublicAccount.address).pipe(
-//		op.filter((tx) => tx.transactionInfo !== undefined && tx.transactionInfo.hash === signedTxHash)
-//	)
-
 	const transactionObservable = listener.confirmed(alicePublicAccount.address);
 	const errorObservable = listener.status(alicePublicAccount.address, signedTxHash);
 	return rxjs.merge(transactionObservable, errorObservable).pipe(
@@ -443,10 +441,11 @@ function showAccountQR(x){
 		op.mergeMap(x=>accountHttp.getAccountInfo(alicePublicAccount.address)),
 	);
 
-
 	accountSubscribe(aliceHttp);
 	accountSubscribe(aliceListener);
 
+	//未承認トランザクション受信（スピナー回す） 
+	//TODO: アグリゲートトランザクション未対応
 	listener.unconfirmedAdded(alicePublicAccount.address)
 	.pipe(
 		op.filter((tx) => tx.mosaics !== undefined),
@@ -632,19 +631,10 @@ function handoverHanco(targetPulicKey){
 //アグリゲートボンデッドトランザクション
 function exeAggBondedTx(metaTx,targetPublicAccount,signer,callback){
 
-	//注：このトランザクションがなくても成立するがトリガーが反応しないため明示的に作成 issue済み。いずれ削除
-//	const optinTx = nem.TransferTransaction.create(
-//		nem.Deadline.create(),
-//		alicePublicAccount.address,[],
-//		nem.PlainMessage.create(''),
-//		nem.NetworkType.TEST_NET
-//	);
-
 	const aggregateTx = nem.AggregateTransaction.createBonded(
 		nem.Deadline.create(),
 		[
-			metaTx.toAggregate(alicePublicAccount),
-//			optinTx.toAggregate(targetPublicAccount)
+			metaTx.toAggregate(alicePublicAccount)
 		],
 		nem.NetworkType.TEST_NET,[],
 		nem.UInt64.fromUint(2000000)
@@ -674,8 +664,6 @@ function exeAggBondedTx(metaTx,targetPublicAccount,signer,callback){
 		aggregate: signedAggregateTx,
 		hashLock: signedLockTx,
 	};
-	console.log('Aggregate Transaction Hash:', signedAggregateTx.hash + '\n');
-	console.log('HashLock Transaction Hash:', signedLockTx.hash + '\n');
 	console.log(NODE + "/transaction/" + signedAggregateTx.hash + "/status");
 	console.log(NODE + "/transaction/" + signedLockTx.hash + "/status");
 
@@ -747,18 +735,6 @@ $(".nav-item a").click( function(e){
 		stopVideo();
 	}
 });
-
-/*
-//QRコードスキャン完了時
-function resultQR(data){
-
-	if(      currentTab == "tab_confirm" ){ scanData.innerText = data;//承認
-	}else if(currentTab == "tab_verify"  ){ scanData.innerText = JSON.parse(data).data.hash;//検証
-	}else if(currentTab == "tab_handover"){ scanData.innerText = JSON.parse(data).data.publicKey;//譲渡
-	}else if(currentTab == "tab_"        ){ scanData.innerText = data;//復元
-	}
-}
-*/
 
 //モーダルウィンドウOKクリック時
 $("#modal_ok").click(function(){
