@@ -691,7 +691,7 @@ function exeAggBondedTx(metaTx,targetPublicAccount,signer,callback){
 	).subscribe(aggTx => {
 
 		//targetアカウントを監視する//
-		const bondedListener = new nem.Listener(wsEndpoint,namespaceHttp, WebSocket);
+		const bondedListener = new nem.Listener(wsEndpoint,nsHttp, WebSocket);
 		bondedListener.open().then(() => {
 
 			bondedListener.confirmed(targetPublicAccount.address)
@@ -771,7 +771,7 @@ $("#modal_ok").click(function(){
 	const jsonData = JSON.parse(scanData.innerText).data;
 
 	//承認
-	if(currentTab == "tab_confirm"){ 
+	if(currentTab == "tab_confirm"){
 
 		$('#scan_data_confirm').text(scanData.innerText);
 		const jsonData = JSON.parse(scanData.innerText).data;
@@ -789,7 +789,7 @@ $("#modal_ok").click(function(){
 		}
 
 	//検証
-	}else if(currentTab == "tab_verify"){ 
+	}else if(currentTab == "tab_verify"){
 
 		(async() => {
 			const tx = await txHttp.getTransaction(jsonData.hash).toPromise();
@@ -815,7 +815,7 @@ $("#modal_ok").click(function(){
 
 
 	//譲渡
-	}else if(currentTab == "tab_handover"){ 
+	}else if(currentTab == "tab_handover"){
 
 		$('#scan_data_handover').text(jsonData.publicKey);
 
@@ -906,7 +906,7 @@ $("#restore").click(function(){
 
 //無効化：アカウント・トランザクション
 $("#cancel_contact").click(function(){ cancelHanco();});
-$("#cancel_confirm").click(function(){ 
+$("#cancel_confirm").click(function(){
 
 	const jsonData = JSON.parse($('#scan_data_confirm').text()).data;
 	if(jsonData.name == 'xemhanco.tx.1'){
