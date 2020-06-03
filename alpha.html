@@ -18,7 +18,7 @@
 		<input type="text" id="pass" class="form-control">
 		<button type="button" id="create" class="btn btn-primary">作成</button>
 		<button type="button" id="restore" class="btn btn-primary">復元</button>
-	</div>
+	</div><!-- div1 -->
 
 	<div class="collapse" id="div2">
 		<div><img id="hanco"></div>
@@ -28,8 +28,8 @@
 				インク充填
 			</button>
 
-		<label id="amount">0 XYM</label></div>
-	</div>
+		　<label id="amount">0 XYM</label></div>
+	</div><!-- div2 -->
 
 	<div class="collapse" id="div3">
 		<hr>
@@ -51,7 +51,6 @@
 					<div class="card-body">
 						<h5 class="card-title">口座ID　<span id="disabled_contact" class="collapse badge badge-danger" >無効</span></h5>
 						<p class="card-text" id="text_contact"></p>
-						<a id="download_contact" href="javascript:void(0);" download="contact_qr.png" class="btn btn-primary">ダウンロード</a>
 						<a id="cancel_contact" href="javascript:void(0);" class="btn btn-primary">無効化</a>
 					</div>
 				</div>
@@ -117,7 +116,6 @@
 			<!-- 譲渡 -->
 			<div id="tab_handover" class="tab-pane">
 				<div><b>譲渡先ID:</b> <span id="scan_data_handover" class="text-break"></span></div>
-				<!-- <div id="confirmed_verify"><ul></ul></div> -->
 				<div>
 					<button type="button" id="button_handover" class="btn btn-primary">
 						<span id="spinner_handover" class="collapse spinner-border spinner-border-sm" role="status"></span>
@@ -128,7 +126,7 @@
 	</div><!-- div3 -->
 </div>
 
-<!-- モーダルの設定 -->
+<!-- QRスキャンモーダル -->
 <div class="modal fade" id="modal-qrscan" tabindex="-1" role="dialog" aria-labelledby="myModalLabel">
 	<div class="modal-dialog" role="document">
 		<div class="modal-content">
@@ -158,11 +156,12 @@
 	</div><!-- /.modal-dialog -->
 </div><!-- /.modal -->
 
+<!-- はんこ選択モーダル -->
 <div class="modal fade" id="modal-msig" tabindex="-1" role="dialog" aria-labelledby="myModalLabel">
 	<div class="modal-dialog" role="document">
 		<div class="modal-content">
 			<div class="modal-header">
-				<h5 class="modal-title">選択</h5>
+				<h5 class="modal-title">はんこ選択</h5>
 				<button type="button" class="close" data-dismiss="modal" aria-label="閉じる">
 					<span aria-hidden="true">&times;</span>
 				</button>
@@ -363,9 +362,23 @@ function scanFileImage(){
 //選択中はんこの完了トランザクション検知リスナー
 const aliceSignedTxConfirmed = function(signedTxHash){
 
-	return listener.confirmed(alicePublicAccount.address).pipe(
-		op.filter((tx) => tx.transactionInfo !== undefined && tx.transactionInfo.hash === signedTxHash)
-	)
+//	listener.status(alicePublicAccount.address,signedTxHash)
+//	return listener.confirmed(alicePublicAccount.address).pipe(
+//		op.filter((tx) => tx.transactionInfo !== undefined && tx.transactionInfo.hash === signedTxHash)
+//	)
+
+	const transactionObservable = listener.confirmed(alicePublicAccount.address);
+	const errorObservable = listener.status(alicePublicAccount.address, signedTxHash);
+	return rxjs.merge(transactionObservable, errorObservable).pipe(
+		op.first(),
+		op.map((errorOrTransaction) => {
+			if (errorOrTransaction.constructor.name === "TransactionStatusError") {
+				throw new Error(errorOrTransaction.code);
+			} else {
+				return errorOrTransaction;
+			}
+		}),
+	);
 }
 
 //署名要求検知リスナー
@@ -491,31 +504,10 @@ function signByHanco(confirmedAddress,divId,message){
 
 	$('#spinner_'+divId).collapse('show');
 
-	transactionService.announce(signedTx, listener)
-	.subscribe(_=> {
-		$('#spinner_'+divId).collapse('hide');
-  		$('#confirmed_' + divId + ' ul')
-  		.append('<li><a target="_blank" href="' + EXPLORER + '/transaction/' + signedTx.hash + '">エクスプローラーで確認</a></li>');
-
-  		const object = {"name":"xemhanco.tx.1","hash": signedTx.hash};
-  		var obj = qr.QRCodeGenerator.createExportObject(object);
-  		obj.generationHash = "";
-  		obj.toBase64().subscribe(x=>{
-
-  			$('#confirmed_' + divId + ' ul')
-  			.append('<li><img src=' + x + '></li>');
-  		});
-    },
-    (err) => {
-        console.error(err.message) // ex. Failure_Core_Insufficient_Balance
-    })
-
-
-/*
 	const txHttp = new nem.TransactionHttp(NODE);
 	txHttp.announce(signedTx)
 	.pipe(
-		op.mergeMap(_=> aliceSignedTxConfirmed(signedTx))
+		op.mergeMap(_=> aliceSignedTxConfirmed(signedTx.hash))
 	)
 	.subscribe(function(_){
 
@@ -531,8 +523,11 @@ function signByHanco(confirmedAddress,divId,message){
 			$('#confirmed_' + divId + ' ul')
 			.append('<li><img src=' + x + '></li>');
 		});
-	},err => console.error(err));
-	*/
+	},err => {
+		alert(err);
+		console.error(err)
+	});
+
 	console.log(NODE + "/transaction/" + signedTx.hash + "/status");
 }
 
@@ -924,11 +919,6 @@ $('#modal-qrscan').on('hide.bs.modal', function (e) {
 	scanData.innerText = "";
 })
 
-//口座：ダウンロード
-$('#download_contact').click(function(e){
-	const contactQR = new qr.ContactQR("xemhanco.contact.1",alicePublicAccount);
-	contactQR.toBase64().subscribe(x=>{this.href = x});
-});
 
 //自署:押印
 $('#button_selfsign').click(function(e) {
