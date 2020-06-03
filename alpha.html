@@ -379,7 +379,7 @@ const aliceSignedTxConfirmed = function(signedTxHash){
 	);
 }
 
-//署名要求検知リスナー
+//連署要求検知リスナー
 function setCosignerListener(cosignerAccount){
 
 	var bondedSubscribe = function(observer){
@@ -404,7 +404,10 @@ function setCosignerListener(cosignerAccount){
 		)
 		.subscribe(
 			x => alert("署名完了しました"),
-			err => console.error(err)
+			err => {
+				alert(err);
+				console.error(err);
+			}
 		);
 	}
 
@@ -444,7 +447,7 @@ function showAccountQR(x){
 	accountSubscribe(aliceHttp);
 	accountSubscribe(aliceListener);
 
-	//未承認トランザクション受信（スピナー回す） 
+	//未承認トランザクション受信（スピナー回す）
 	//TODO: アグリゲートトランザクション未対応
 	listener.unconfirmedAdded(alicePublicAccount.address)
 	.pipe(
@@ -459,8 +462,6 @@ function showAccountQR(x){
 		console.log("unconfirmed")
 		$('#spinner_faucet').collapse('show')
 	},err => console.error(err));
-
-
 
 	const contactQR = new qr.ContactQR("xemhanco.contact.1",alicePublicAccount);
 	contactQR.toBase64().subscribe(x => {
@@ -523,8 +524,7 @@ function signByHanco(confirmedAddress,divId,message){
 		});
 	},err => {
 		alert(err);
-		console.error(err)
-
+		console.error(err);
 	},() => $('#spinner_'+divId).collapse('hide')
 	);
 
@@ -675,9 +675,29 @@ function exeAggBondedTx(metaTx,targetPublicAccount,signer,callback){
 	).subscribe(aggTx => {
 
 		//targetアカウントを監視する//
-		const bondedListener = new nem.Listener(wsEndpoint,nsHttp, WebSocket);
-		bondedListener.open().then(() => {
+//		const bondedListener = new nem.Listener(wsEndpoint,nsHttp, WebSocket);
+//		bondedListener.open().then(() => {
 
+			const transactionObservable = listener.confirmed(targetPublicAccount.address);
+			const errorObservable = listener.status(targetPublicAccount.address, aggTx.transactionInfo.hash);
+			rxjs.merge(transactionObservable, errorObservable)
+			.pipe(
+				op.first(),
+				op.map((errorOrTransaction) => {
+					if (errorOrTransaction.constructor.name === "TransactionStatusError") {
+						throw new Error(errorOrTransaction.code);
+					} else {
+						return errorOrTransaction;
+					}
+				}),
+			)
+			.subscribe(tx => {
+				callback();
+			},err =>{
+				alert(err);
+				console.error(err);
+			});
+/*
 			bondedListener.confirmed(targetPublicAccount.address)
 			.pipe(
 				op.filter(tx => {
@@ -688,9 +708,10 @@ function exeAggBondedTx(metaTx,targetPublicAccount,signer,callback){
 			.subscribe(tx => {
 				callback();
 			},err => console.error(err));
-		},
-		(err) => console.log(err),
-		() => bondedListener.close());
+*/
+//		},
+//		(err) => console.log(err),
+//		() => bondedListener.close());
 		////////////////////////////////////////////////
 	});
 }
@@ -703,8 +724,10 @@ function cancelHanco(){ ////はんこキャンセル
 		aliceSignedTxConfirmed(signedTx.hash)
 		.subscribe(function(_){
 			$('#disabled_contact').collapse('show');
-
-		},err => console.error(err));
+		},err => {
+			alert(err);
+			console.error(err);
+		});
 	});
 }
 
@@ -732,6 +755,7 @@ $(".nav-item a").click( function(e){
 		startVideo("handover");
 
 	}else{
+		//上記以外のタブ選択でビデオ止める
 		stopVideo();
 	}
 });
@@ -784,7 +808,6 @@ $("#modal_ok").click(function(){
 			.append('<li><b>署名テキスト:</b> <span>' + tx.innerTransactions[0].message.payload		+ '</span></li>')
 			.append('<li><b>タイムスタンプ:</b> <span>' + dispTimeStamp(bh.timestamp.compact()	+ SYMBOL_EPOCH * 1000) + '</span></li>');
 		})();
-
 
 	//譲渡
 	}else if(currentTab == "tab_handover"){
@@ -849,6 +872,14 @@ $("#modal_ok").click(function(){
 
 //■■■VIEW■■■
 
+//マルチシグ選択
+$("#list-msig").on("click",".button-msig", function() {
+
+	$('#modal-msig').modal('hide');
+	alicePublicAccount = nem.PublicAccount.createFromPublicKey($(this).attr("publicKey"),nem.NetworkType.TEST_NET);
+	showAccountQR();
+});
+
 //作成
 $("#create").click(function(){
 
@@ -887,15 +918,14 @@ $("#cancel_confirm").click(function(){
 	}
 });
 
-//スキャン
+//スキャンモーダルが閉じられた時
 $('#modal-qrscan').on('hide.bs.modal', function (e) {
 
 	stopVideo();
 	canvas.clearRect(0, 0, canvasElement.width, canvasElement.height);
 	$('#file_image').val("");
 	scanData.innerText = "";
-})
-
+});
 
 //自署:押印
 $('#button_selfsign').click(function(e) {
@@ -910,7 +940,7 @@ $('#button_confirm' ).click(function(e) {
 	const jsonData = JSON.parse($('#scan_data_confirm').text()).data;
 	if(jsonData.name == 'xemhanco.contact.1'){
 
-		//申請アカウントに対して承認
+		//申請アカウント（口座ID）に対して承認
 		//メッセージは＃text_confirmで指定
 		const confirmedAccount = nem.PublicAccount.createFromPublicKey(jsonData.publicKey,nem.NetworkType.TEST_NET);
 		signByHanco(confirmedAccount.address,"confirm",$("#text_confirm").val())
@@ -928,13 +958,7 @@ $('#button_confirm' ).click(function(e) {
 	}
 });
 
-//譲渡：マルチシグ選択
-$("#list-msig").on("click",".button-msig", function() {
 
-	$('#modal-msig').modal('hide');
-	alicePublicAccount = nem.PublicAccount.createFromPublicKey($(this).attr("publicKey"),nem.NetworkType.TEST_NET);
-	showAccountQR();
-});
 
 $('#file_image'		).change(function(e){scanFileImage();});
 $('#file_confirm'	).change(function(e){setFileHash('confirm')});
