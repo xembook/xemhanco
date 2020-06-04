@@ -243,8 +243,8 @@ listener.open().then(() => {
 
 
 //グローバル変数
-var alicePublicAccount;//操作対象アカウント（マルチシグの場合は操作される対象のアカウント）
-var aliceJSON;//暗号化済み署名者アカウント　変数名は変える必要あり
+var assetPublicAccount;//操作対象アカウント（マルチシグの場合は操作される対象のアカウント）
+var signerJSON;//暗号化済み署名者アカウント　変数名は変える必要あり
 var canvasElement;
 var canvas;
 var scanData;
@@ -363,10 +363,10 @@ function scanFileImage(){
 ////////////////////////////////////////////////////////
 
 //選択中はんこの完了トランザクション検知リスナー
-const aliceSignedTxConfirmed = function(signedTxHash){
+const assetSignedTxConfirmed = function(signedTxHash){
 
-	const transactionObservable = listener.confirmed(alicePublicAccount.address);
-	const errorObservable = listener.status(alicePublicAccount.address, signedTxHash);
+	const transactionObservable = listener.confirmed(assetPublicAccount.address);
+	const errorObservable = listener.status(assetPublicAccount.address, signedTxHash);
 	return rxjs.merge(transactionObservable, errorObservable).pipe(
 		op.first(),
 		op.map((errorOrTransaction) => {
@@ -380,16 +380,16 @@ const aliceSignedTxConfirmed = function(signedTxHash){
 }
 
 //連署要求検知リスナー
-function setCosignerListener(cosignerAccount){
+function setSignerListener(cosignerAccount){
 
 	var bondedSubscribe = function(observer){
 		observer.pipe(
 			op.filter(_ =>  !_.signedByAccount(cosignerAccount)),
 			op.map(_ => {
-				const aliceQR = qr.AccountQR.fromJSON(aliceJSON,
+				const signerQR = qr.AccountQR.fromJSON(signerJSON,
 					window.prompt("署名要求があります。パスフレーズをもう一度入力してください", "")
 				);
-				return aliceQR.account.signCosignatureTransaction(nem.CosignatureTransaction.create(_));
+				return signerQR.account.signCosignatureTransaction(nem.CosignatureTransaction.create(_));
 			}),
 			op.mergeMap(_ => {
 				return rxjs.of({
@@ -399,7 +399,7 @@ function setCosignerListener(cosignerAccount){
 			}),
 			op.mergeMap(_=>{
 				console.log(_);
-				return aliceSignedTxConfirmed(_.hash);
+				return assetSignedTxConfirmed(_.hash);
 			})
 		)
 		.subscribe(
@@ -437,19 +437,19 @@ function showAccountQR(x){
 		},err => console.error(err));
 	}
 
-	const aliceHttp = accountHttp.getAccountInfo(alicePublicAccount.address)
-	const aliceListener = listener.confirmed(alicePublicAccount.address)
+	const assetHttp = accountHttp.getAccountInfo(assetPublicAccount.address)
+	const assetListener = listener.confirmed(assetPublicAccount.address)
 	.pipe(
 		op.delay(1000),
-		op.mergeMap(x=>accountHttp.getAccountInfo(alicePublicAccount.address)),
+		op.mergeMap(x=>accountHttp.getAccountInfo(assetPublicAccount.address)),
 	);
 
-	accountSubscribe(aliceHttp);
-	accountSubscribe(aliceListener);
+	accountSubscribe(assetHttp);
+	accountSubscribe(assetListener);
 
 	//未承認トランザクション受信（スピナー回す）
 	//TODO: アグリゲートトランザクション未対応
-	listener.unconfirmedAdded(alicePublicAccount.address)
+	listener.unconfirmedAdded(assetPublicAccount.address)
 	.pipe(
 		op.filter((tx) => tx.mosaics !== undefined),
 		op.mergeMap(_=>{
@@ -463,20 +463,20 @@ function showAccountQR(x){
 		$('#spinner_faucet').collapse('show')
 	},err => console.error(err));
 
-	const contactQR = new qr.ContactQR("xemhanco.contact.1",alicePublicAccount);
+	const contactQR = new qr.ContactQR("xemhanco.contact.1",assetPublicAccount);
 	contactQR.toBase64().subscribe(x => {
 		$('#contact').attr('src',x);
-		$('#text_contact').text(alicePublicAccount.publicKey);
+		$('#text_contact').text(assetPublicAccount.publicKey);
 	});
 
-	const key = nem.KeyGenerator.generateUInt64Key(alicePublicAccount.publicKey);
-	metaHttp.getAccountMetadataByKeyAndSender(alicePublicAccount.address,key.toHex(),alicePublicAccount.publicKey)
+	const key = nem.KeyGenerator.generateUInt64Key(assetPublicAccount.publicKey);
+	metaHttp.getAccountMetadataByKeyAndSender(assetPublicAccount.address,key.toHex(),assetPublicAccount.publicKey)
 	.pipe(
 		op.filter(_=> _.metadataEntry.value == "disabled")
 	)
 	.subscribe(_=>{
 		$('#disabled_contact').collapse('show');
-	})
+	});
 }
 
 //押印（自署・承認）
@@ -493,21 +493,21 @@ function signByHanco(confirmedAddress,divId,message){
 
 	const aggregateTx = nem.AggregateTransaction.createComplete(
 		nem.Deadline.create(),
-		[tx.toAggregate(alicePublicAccount)],
+		[tx.toAggregate(assetPublicAccount)],
 		nem.NetworkType.TEST_NET,[],
 		nem.UInt64.fromUint(100000)
 	);
 
-	const aliceQR = qr.AccountQR.fromJSON(aliceJSON,window.prompt("パスフレーズを入力してください", ""));
-	const signedTx = aliceQR.account.sign(aggregateTx,GENERATION_HASH);
-	delete aliceQR;
+	const signerQR = qr.AccountQR.fromJSON(signerJSON,window.prompt("パスフレーズを入力してください", ""));
+	const signedTx = signerQR.account.sign(aggregateTx,GENERATION_HASH);
+	delete signerQR;
 
 	$('#spinner_'+divId).collapse('show');
 
 	const txHttp = new nem.TransactionHttp(NODE);
 	txHttp.announce(signedTx)
 	.pipe(
-		op.mergeMap(_=> aliceSignedTxConfirmed(signedTx.hash))
+		op.mergeMap(_=> assetSignedTxConfirmed(signedTx.hash))
 	)
 	.subscribe(function(_){
 
@@ -534,28 +534,28 @@ function signByHanco(confirmedAddress,divId,message){
 //無効化
 async function addMeta(callback){
 
-	const key = nem.KeyGenerator.generateUInt64Key(alicePublicAccount.publicKey);
+	const key = nem.KeyGenerator.generateUInt64Key(assetPublicAccount.publicKey);
 	const value = 'disabled';
 
 	const metaTx = await metaService.createMetadataTransaction(
 		nem.Deadline.create(),
 		nem.NetworkType.TEST_NET,
 		nem.MetadataType.Account,
-		alicePublicAccount,//target
+		assetPublicAccount,//target
 		key,value,
-		alicePublicAccount // sender
+		assetPublicAccount // sender
 	).toPromise();
 
 	const aggregateTx = nem.AggregateTransaction.createComplete(
 		nem.Deadline.create(),
-		[metaTx.toAggregate(alicePublicAccount)],
+		[metaTx.toAggregate(assetPublicAccount)],
 		nem.NetworkType.TEST_NET,[],
 		nem.UInt64.fromUint(100000)
 	);
 
-	const aliceQR = qr.AccountQR.fromJSON(aliceJSON,window.prompt("パスフレーズを入力してください", ""));
-	const signedTx = aliceQR.account.sign(aggregateTx,GENERATION_HASH);
-	delete aliceQR;
+	const signerQR = qr.AccountQR.fromJSON(signerJSON,window.prompt("パスフレーズを入力してください", ""));
+	const signedTx = signerQR.account.sign(aggregateTx,GENERATION_HASH);
+	delete signerQR;
 
 	const res = await txHttp.announce(signedTx).toPromise();
 	callback(signedTx);
@@ -568,9 +568,9 @@ async function addAuth(){
 	const tx = await txHttp.getTransaction($('#confirmed_verify_hash').text()).toPromise();
 	const ac = await accountHttp.getAccountInfo(tx.innerTransactions[0].recipientAddress).toPromise();
 	const targetPublicAccount = nem.PublicAccount.createFromPublicKey(ac.publicKey,nem.NetworkType.TEST_NET)
-	const key = nem.KeyGenerator.generateUInt64Key(alicePublicAccount.publicKey);
+	const key = nem.KeyGenerator.generateUInt64Key(assetPublicAccount.publicKey);
 	const value = 'authenticated';
-	const aliceQR = qr.AccountQR.fromJSON(aliceJSON,window.prompt("パスフレーズを入力してください", ""));
+	const signerQR = qr.AccountQR.fromJSON(signerJSON,window.prompt("パスフレーズを入力してください", ""));
 
 	const metaTx = metaService.createMetadataTransaction(
 		nem.Deadline.create(),
@@ -578,20 +578,19 @@ async function addAuth(){
 		nem.MetadataType.Account,
 		targetPublicAccount,//target
 		key,value,
-		alicePublicAccount // sender
+		assetPublicAccount // sender
 
 	).subscribe(tx=>{
 
 		$('#spinner_auth').collapse('show');
 
-		exeAggBondedTx(tx,targetPublicAccount,aliceQR.account,async function(){
+		exeAggBondedTx(tx,targetPublicAccount,signerQR.account,async function(){
 
-			$('#spinner_auth').collapse('hide');
 			const bh = await blockHttp.getBlockByHeight(tx.transactionInfo.height).toPromise();
 			$('#confirmed_verify ul')
 			.append('<li><b>認証日時:</b> <span>' + dispTimeStamp(bh.timestamp.compact() + SYMBOL_EPOCH * 1000) + '</span></li>');
-			delete aliceQR;
-		});
+			delete signerQR;
+		},function(){$('#spinner_auth').collapse('hide')});
 	});
 }
 
@@ -599,10 +598,10 @@ async function addAuth(){
 function handoverHanco(targetPulicKey){
 
 	const targetPublicAccount = nem.PublicAccount.createFromPublicKey(targetPulicKey,nem.NetworkType.TEST_NET)
-	const aliceQR = qr.AccountQR.fromJSON(aliceJSON,window.prompt("パスフレーズを入力してください", ""));
+	const signerQR = qr.AccountQR.fromJSON(signerJSON,window.prompt("パスフレーズを入力してください", ""));
 
 	var msigTx;
-	if(aliceQR.account.publicKey === alicePublicAccount.publicKey){
+	if(signerQR.account.publicKey === assetPublicAccount.publicKey){
 
 		//初譲渡（所有化）
 		msigTx = nem.MultisigAccountModificationTransaction.create(
@@ -615,26 +614,26 @@ function handoverHanco(targetPulicKey){
 		//再譲渡(所有移転)
 		msigTx = nem.MultisigAccountModificationTransaction.create(
 			nem.Deadline.create(),
-			0,0,[targetPublicAccount],[aliceQR.account],nem.NetworkType.TEST_NET
+			0,0,[targetPublicAccount],[signerQR.account],nem.NetworkType.TEST_NET
 		);
 	}
 
 	$('#spinner_handover').collapse('show');
-	exeAggBondedTx(msigTx,targetPublicAccount,aliceQR.account,function(){
+	exeAggBondedTx(msigTx,targetPublicAccount,signerQR.account,function(){
 
-		$('#spinner_handover').collapse('hide');
+
 		alert("譲渡完了しました");
-		delete aliceQR;
-	});
+		delete signerQR;
+	},function(){$('#spinner_handover').collapse('hide')});
 }
 
 //アグリゲートボンデッドトランザクション
-function exeAggBondedTx(metaTx,targetPublicAccount,signer,callback){
+function exeAggBondedTx(metaTx,targetPublicAccount,signer,callback,final){
 
 	const aggregateTx = nem.AggregateTransaction.createBonded(
 		nem.Deadline.create(),
 		[
-			metaTx.toAggregate(alicePublicAccount)
+			metaTx.toAggregate(assetPublicAccount)
 		],
 		nem.NetworkType.TEST_NET,[],
 		nem.UInt64.fromUint(2000000)
@@ -652,7 +651,7 @@ function exeAggBondedTx(metaTx,targetPublicAccount,signer,callback){
 
 	const aggregateLockTx = nem.AggregateTransaction.createComplete(
 		nem.Deadline.create(),
-		[hashLockTx.toAggregate(alicePublicAccount)],
+		[hashLockTx.toAggregate(assetPublicAccount)],
 		nem.NetworkType.TEST_NET,[],
 		nem.UInt64.fromUint(100000)
 	);
@@ -696,6 +695,8 @@ function exeAggBondedTx(metaTx,targetPublicAccount,signer,callback){
 			},err =>{
 				alert(err);
 				console.error(err);
+			},()=>{
+				final();
 			});
 /*
 			bondedListener.confirmed(targetPublicAccount.address)
@@ -721,7 +722,7 @@ function cancelSign(hash){addMeta(_ => {})} //トランザクションキャン�
 function cancelHanco(){ ////はんこキャンセル
 	addMeta(signedTx => {
 
-		aliceSignedTxConfirmed(signedTx.hash)
+		assetSignedTxConfirmed(signedTx.hash)
 		.subscribe(function(_){
 			$('#disabled_contact').collapse('show');
 		},err => {
@@ -777,7 +778,7 @@ $("#modal_ok").click(function(){
 
 			txHttp.getTransaction(jsonData.hash)
 			.pipe(
-				op.filter(tx => tx.signer.publicKey === alicePublicAccount.publicKey)
+				op.filter(tx => tx.signer.publicKey === assetPublicAccount.publicKey)
 			)
 			.subscribe(_ => $('#div_cancel_confirm').collapse('show'));
 		}else{
@@ -797,6 +798,9 @@ $("#modal_ok").click(function(){
 				if(mt.metadataEntry.value === "disabled"){
 					$('#confirmed_verify ul')
 					.append('<li><span class="badge badge-danger" >無効</span></li>');
+				}else if(mt.metadataEntry.value === "authenticated"){
+					$('#confirmed_verify ul')
+					.append('<li><b>認証日時:</b> <span>' + dispTimeStamp(bh.timestamp.compact() + SYMBOL_EPOCH * 1000) + '</span></li>');
 				}
 			})
 			.catch(err=>console.error(err));
@@ -818,16 +822,16 @@ $("#modal_ok").click(function(){
 	}else if(currentTab == "tab_"){
 
 		try{
-			const aliceQR = qr.AccountQR.fromJSON(scanData.innerText,$("#pass").val());
-			alicePublicAccount = aliceQR.account.publicAccount;
-			setCosignerListener(alicePublicAccount);
-			aliceQR.toBase64().subscribe(x => {
+			const signerQR = qr.AccountQR.fromJSON(scanData.innerText,$("#pass").val());
+			assetPublicAccount = signerQR.account.publicAccount;
+			setSignerListener(assetPublicAccount);
+			signerQR.toBase64().subscribe(x => {
 				$('#div1').collapse('hide');
 				$('#div2').collapse('show');
 				$('#hanco').attr('src',x);
 			});
-			aliceJSON = aliceQR.toJSON();
-			delete aliceQR;
+			signerJSON = signerQR.toJSON();
+			delete signerQR;
 		}
 		catch (e) {
 			alert(e);
@@ -845,12 +849,12 @@ $("#modal_ok").click(function(){
 			);
 		};
 		//マルチシグ保有調査
-		multisigHttp.getMultisigAccountInfo(alicePublicAccount.address)
+		multisigHttp.getMultisigAccountInfo(assetPublicAccount.address)
 		.subscribe(_=>{
 
 			if(_.multisigAccounts.length > 0){
 
-				appendList(alicePublicAccount.publicKey,"マイはんこ");
+				appendList(assetPublicAccount.publicKey,"マイはんこ");
 				for (item of _.multisigAccounts) {
 					appendList(item.publicKey,item.publicKey);
 				}
@@ -876,27 +880,27 @@ $("#modal_ok").click(function(){
 $("#list-msig").on("click",".button-msig", function() {
 
 	$('#modal-msig').modal('hide');
-	alicePublicAccount = nem.PublicAccount.createFromPublicKey($(this).attr("publicKey"),nem.NetworkType.TEST_NET);
+	assetPublicAccount = nem.PublicAccount.createFromPublicKey($(this).attr("publicKey"),nem.NetworkType.TEST_NET);
 	showAccountQR();
 });
 
 //作成
 $("#create").click(function(){
 
-	const alice = nem.Account.generateNewAccount(nem.NetworkType.TEST_NET);
-	alicePublicAccount = alice.publicAccount;
-	setCosignerListener(alicePublicAccount);
+	const asset = nem.Account.generateNewAccount(nem.NetworkType.TEST_NET);
+	assetPublicAccount = asset.publicAccount;
+	setSignerListener(assetPublicAccount);
 
-	const aliceQR = new qr.AccountQR(alice,$("#pass").val(),nem.NetworkType.TEST_NET);
-	aliceQR.toBase64().subscribe(x =>{
+	const signerQR = new qr.AccountQR(asset,$("#pass").val(),nem.NetworkType.TEST_NET);
+	signerQR.toBase64().subscribe(x =>{
 		showAccountQR(x);
 		$('#div1').collapse('hide');
 		$('#div2').collapse('show');
 		$('#hanco').attr('src',x);
 	});
-	aliceJSON = aliceQR.toJSON();
-	delete alice;
-	delete aliceQR;
+	signerJSON = signerQR.toJSON();
+	delete asset;
+	delete signerQR;
 });
 
 //復元
@@ -932,7 +936,7 @@ $('#button_selfsign').click(function(e) {
 
 	//自分（マルチシグ選択中）のアカウントに対して承認
 	//メッセージは＃text_selfsignで指定
-	signByHanco(alicePublicAccount.address,"selfsign",$("#text_selfsign").val())});
+	signByHanco(assetPublicAccount.address,"selfsign",$("#text_selfsign").val())});
 
 //承認：押印
 $('#button_confirm' ).click(function(e) {
@@ -965,7 +969,7 @@ $('#file_confirm'	).change(function(e){setFileHash('confirm')});
 $('#file_selfsign'	).change(function(e){setFileHash('selfsign')});
 $("#button_auth"	).click(function(){addAuth()});
 $("#button_handover").click(function(){handoverHanco($('#scan_data_handover').text())});
-$("#button_faucet"	).click(function(){window.open(FAUCET + "/?recipient=" + alicePublicAccount.address.plain() + "&amount=20","_blank")});
+$("#button_faucet"	).click(function(){window.open(FAUCET + "/?recipient=" + assetPublicAccount.address.plain() + "&amount=20","_blank")});
 $('#div1').collapse('show');//アプリケーション開始
 })</script>
 </body>
