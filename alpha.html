@@ -807,7 +807,7 @@ $("#modal_ok").click(function(){
 
 			$('#confirmed_verify ul')
 			.append('<li><a target="_blank" href="' + EXPLORER + '/transaction/' + tx.transactionInfo.hash + '">エクスプローラーで確認</a></li>')
-			.append('<li><b>口座ID:</b> <span id="confirmed_verify_publicKey">'    + tx.signer.publicKey	 + '</span></li>')
+			.append('<li><b>口座ID:</b> <span id="confirmed_verify_publicKey">'    + tx.innerTransactions[0].signer.publicKey	 + '</span></li>')
 			.append('<li><b>TX hash:</b> <span id="confirmed_verify_hash">'	+ tx.transactionInfo.hash + '</span></li>')
 			.append('<li><b>署名テキスト:</b> <span>' + tx.innerTransactions[0].message.payload		+ '</span></li>')
 			.append('<li><b>タイムスタンプ:</b> <span>' + dispTimeStamp(bh.timestamp.compact()	+ SYMBOL_EPOCH * 1000) + '</span></li>');
@@ -961,8 +961,6 @@ $('#button_confirm' ).click(function(e) {
 		alert("承認できないデータです");
 	}
 });
-
-
 
 $('#file_image'		).change(function(e){scanFileImage();});
 $('#file_confirm'	).change(function(e){setFileHash('confirm')});
