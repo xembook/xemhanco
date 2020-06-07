@@ -525,8 +525,7 @@ function signByHanco(confirmedAddress,divId,message){
 	},err => {
 		alert(err);
 		console.error(err);
-	},() => $('#spinner_'+divId).collapse('hide')
-	);
+	}).add(() => $('#spinner_' + divId).collapse('hide'));
 
 	console.log(NODE + "/transaction/" + signedTx.hash + "/status");
 }
@@ -695,9 +694,7 @@ function exeAggBondedTx(metaTx,targetPublicAccount,signer,callback,final){
 			},err =>{
 				alert(err);
 				console.error(err);
-			},()=>{
-				final();
-			});
+			}).add(()=>final());
 /*
 			bondedListener.confirmed(targetPublicAccount.address)
 			.pipe(
@@ -860,6 +857,9 @@ $("#modal_ok").click(function(){
 				}
 				$('#modal-msig').modal('show');
 			}else{
+				if(_.cosignatories.length > 0){
+					alert("すでに譲渡されたアカウントです。");
+				}
 				showAccountQR();
 			}
 		},
