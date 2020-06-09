@@ -236,12 +236,6 @@ listener.open().then(() => {
 	setInterval(function(){listener.newBlock()}, 30000);
 });
 
-//アカウントの種類
-//署名アカウント（1つだけ。連署アカウント）
-//操作アカウント（マルチシグアカウント）
-//操作対象アカウント（承認・認証等オプトイン要求先アカウント）
-
-
 //グローバル変数
 var assetPublicAccount;//操作対象アカウント（マルチシグの場合は操作される対象のアカウント）
 var signerJSON;//暗号化済み署名者アカウント　変数名は変える必要あり
@@ -673,43 +667,25 @@ function exeAggBondedTx(metaTx,targetPublicAccount,signer,callback,final){
 	).subscribe(aggTx => {
 
 		//targetアカウントを監視する//
-//		const bondedListener = new nem.Listener(wsEndpoint,nsHttp, WebSocket);
-//		bondedListener.open().then(() => {
-
-			const transactionObservable = listener.confirmed(targetPublicAccount.address);
-			const errorObservable = listener.status(targetPublicAccount.address, aggTx.transactionInfo.hash);
-			rxjs.merge(transactionObservable, errorObservable)
-			.pipe(
-				op.first(),
-				op.map((errorOrTransaction) => {
-					if (errorOrTransaction.constructor.name === "TransactionStatusError") {
-						throw new Error(errorOrTransaction.code);
-					} else {
-						return errorOrTransaction;
-					}
-				}),
-			)
-			.subscribe(tx => {
-				callback();
-			},err =>{
-				alert(err);
-				console.error(err);
-			}).add(()=>final());
-/*
-			bondedListener.confirmed(targetPublicAccount.address)
-			.pipe(
-				op.filter(tx => {
-					console.log(tx);
-					return tx.transactionInfo !== undefined && tx.transactionInfo.hash === aggTx.transactionInfo.hash;
-				})
-			)
-			.subscribe(tx => {
-				callback();
-			},err => console.error(err));
-*/
-//		},
-//		(err) => console.log(err),
-//		() => bondedListener.close());
+		const transactionObservable = listener.confirmed(targetPublicAccount.address);
+		const errorObservable = listener.status(targetPublicAccount.address, aggTx.transactionInfo.hash);
+		rxjs.merge(transactionObservable, errorObservable)
+		.pipe(
+			op.first(),
+			op.map((errorOrTransaction) => {
+				if (errorOrTransaction.constructor.name === "TransactionStatusError") {
+					throw new Error(errorOrTransaction.code);
+				} else {
+					return errorOrTransaction;
+				}
+			}),
+		)
+		.subscribe(tx => {
+			callback();
+		},err =>{
+			alert(err);
+			console.error(err);
+		}).add(()=>final());
 		////////////////////////////////////////////////
 	});
 }
