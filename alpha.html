@@ -188,15 +188,26 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.14.7/umd/popper.min.js"></script>
 
 <script src="jsQR.js"></script>
-<script src="symbol-qr-library-0.9.1.js"></script>
+<script src="symbol-qr-library-0.12.0.js"></script>
 <script src="symbol-sdk-0.20.6.js"></script>
 <script src="xembook-tools.js"></script>
 <script>$(function() {
+
+
+const SYMBOL_EPOCH = 1573430400;
+const CURRENCY = "5E62990DCAC5BE8A";
+const GENERATION_HASH = "1DFB2FAA9E7F054168B0C5FCB84F4DEB62CC2B4D317D861F3168D161F54EA78B";
+
+const NODE     = 'https://sym-test963.opening-line.jp:3001';
+//const NODE   = 'http://api-01.ap-northeast-1.096x.symboldev.network:3000';
+const FAUCET   = 'http://faucet-96x-01.symboldev.network';
+const EXPLORER = 'http://explorer-96x.symboldev.network';
 
 const nem  = require("/node_modules/symbol-sdk");
 const qr   = require("/node_modules/symbol-qr-library");
 const op   = require("/node_modules/rxjs/operators");
 const rxjs = require("/node_modules/rxjs");
+const repo = new nem.RepositoryFactoryHttp(NODE, nem.NetworkType.TEST_NET,GENERATION_HASH);
 
 // dummy for script kiddy
 var bob = nem.Account.generateNewAccount(nem.NetworkType.TEST_NET);
@@ -204,20 +215,6 @@ var privateKey = bob.privateKey;
 var keyPair = bob.keyPair;
 var secret = keyPair.privateKey;
 
-const SYMBOL_EPOCH = 1573430400;
-
-const NODE = 'https://sym-test963.opening-line.jp:3001';
-//const NODE = 'http://api-02.ap-northeast-1.0941-v1.symboldev.network:3000';
-const FAUCET   = 'http://faucet-96x-01.symboldev.network';
-const EXPLORER = 'http://explorer-96x.symboldev.network';
-const CURRENCY = "05D6A80DE3C9ADCA";
-const GENERATION_HASH = "1DFB2FAA9E7F054168B0C5FCB84F4DEB62CC2B4D317D861F3168D161F54EA78B";
-
-//const NODE = 'https://pentesting1-api.48gh23s.xyz:3001';
-//const FAUCET = 'http://faucet-01.symboldev.network';
-//const GENERATION_HASH = "44D2225B8932C9A96DCB13508CBCDFFA9A9663BFBA2354FEEC8FCFCB7E19846C";
-//const CURRENCY = "747B276C30626442";
-//const EXPLORER = 'http://explorer.symboldev.network';
 
 const nsHttp = new nem.NamespaceHttp(NODE);
 const txHttp  = new nem.TransactionHttp(NODE);
@@ -376,8 +373,10 @@ const assetSignedTxConfirmed = function(signedTxHash){
 //連署要求検知リスナー
 function setSignerListener(cosignerAccount){
 
+
 	var bondedSubscribe = function(observer){
 		observer.pipe(
+
 			op.filter(_ =>  !_.signedByAccount(cosignerAccount)),
 			op.map(_ => {
 				const signerQR = qr.AccountQR.fromJSON(signerJSON,
@@ -406,10 +405,11 @@ function setSignerListener(cosignerAccount){
 	}
 
 	const bondedListener = listener.aggregateBondedAdded(cosignerAccount.address)
-	const bondedHttp = accountHttp.getAccountPartialTransactions(cosignerAccount.address)
+//	const bondedHttp = accountHttp.getAccountPartialTransactions(cosignerAccount.address)
+	const bondedHttp = txHttp.search({address:cosignerAccount.address,group:nem.TransactionGroup.Partial})
 	.pipe(
 		op.delay(2000),
-		op.mergeMap(_ => _)
+		op.mergeMap(page => page.data)
 	);
 
 	bondedSubscribe(bondedListener);
@@ -428,7 +428,7 @@ function showAccountQR(x){
 			$("#amount").text(dispAmount(_.amount.toString(),6) + " XYM");
 			$('#div3').collapse('show');
 			$('#spinner_faucet').collapse('hide')
-		},err => console.error(err));
+		},err => console.log(err));
 	}
 
 	const assetHttp = accountHttp.getAccountInfo(assetPublicAccount.address)
@@ -463,14 +463,17 @@ function showAccountQR(x){
 		$('#text_contact').text(assetPublicAccount.publicKey);
 	});
 
+
 	const key = nem.KeyGenerator.generateUInt64Key(assetPublicAccount.publicKey);
-	metaHttp.getAccountMetadataByKeyAndSender(assetPublicAccount.address,key.toHex(),assetPublicAccount.publicKey)
+	metaHttp.getAccountMetadataByKeyAndSender(assetPublicAccount.address,key.toHex(),assetPublicAccount.address)
 	.pipe(
 		op.filter(_=> _.metadataEntry.value == "disabled")
 	)
 	.subscribe(_=>{
 		$('#disabled_contact').collapse('show');
-	});
+	},err => console.log(err));
+
+
 }
 
 //押印（自署・承認）
@@ -521,7 +524,8 @@ function signByHanco(confirmedAddress,divId,message){
 		console.error(err);
 	}).add(() => $('#spinner_' + divId).collapse('hide'));
 
-	console.log(NODE + "/transaction/" + signedTx.hash + "/status");
+	console.log(NODE + "/transactionStatus/" + signedTx.hash);
+	console.log(NODE + "/transactions/confirmed/" + signedTx.hash);
 }
 
 //無効化
@@ -534,9 +538,9 @@ async function addMeta(callback){
 		nem.Deadline.create(),
 		nem.NetworkType.TEST_NET,
 		nem.MetadataType.Account,
-		assetPublicAccount,//target
+		assetPublicAccount.address,//target
 		key,value,
-		assetPublicAccount // sender
+		assetPublicAccount.address // sender
 	).toPromise();
 
 	const aggregateTx = nem.AggregateTransaction.createComplete(
@@ -552,34 +556,36 @@ async function addMeta(callback){
 
 	const res = await txHttp.announce(signedTx).toPromise();
 	callback(signedTx);
-	console.log(NODE + "/transaction/" + signedTx.hash + "/status");
+	console.log(NODE + "/transactionStatus/" + signedTx.hash);
+	console.log(NODE + "/transactions/confirmed/" + signedTx.hash);
+
 }
 
 //認証
 async function addAuth(){
 
-	const tx = await txHttp.getTransaction($('#confirmed_verify_hash').text()).toPromise();
+	const tx = await txHttp.getTransaction($('#confirmed_verify_hash').text(),nem.TransactionGroup.Confirmed).toPromise();
 	const ac = await accountHttp.getAccountInfo(tx.innerTransactions[0].recipientAddress).toPromise();
 	const targetPublicAccount = nem.PublicAccount.createFromPublicKey(ac.publicKey,nem.NetworkType.TEST_NET)
 	const key = nem.KeyGenerator.generateUInt64Key(assetPublicAccount.publicKey);
 	const value = 'authenticated';
 	const signerQR = qr.AccountQR.fromJSON(signerJSON,window.prompt("パスフレーズを入力してください", ""));
 
-	const metaTx = metaService.createMetadataTransaction(
+	metaService.createMetadataTransaction(
 		nem.Deadline.create(),
 		nem.NetworkType.TEST_NET,
 		nem.MetadataType.Account,
-		targetPublicAccount,//target
+		targetPublicAccount.address,//target
 		key,value,
-		assetPublicAccount // sender
+		assetPublicAccount.address // sender
 
-	).subscribe(tx=>{
+	).subscribe(metaTx=>{
 
 		$('#spinner_auth').collapse('show');
 
-		exeAggBondedTx(tx,targetPublicAccount,signerQR.account,async function(){
+		exeAggBondedTx(metaTx,targetPublicAccount,signerQR.account,async function(aggTx){
 
-			const bh = await blockHttp.getBlockByHeight(tx.transactionInfo.height).toPromise();
+			const bh = await blockHttp.getBlockByHeight(aggTx.transactionInfo.height).toPromise();
 			$('#confirmed_verify ul')
 			.append('<li><b>認証日時:</b> <span>' + dispTimeStamp(bh.timestamp.compact() + SYMBOL_EPOCH * 1000) + '</span></li>');
 			delete signerQR;
@@ -599,7 +605,7 @@ function handoverHanco(targetPulicKey){
 		//初譲渡（所有化）
 		msigTx = nem.MultisigAccountModificationTransaction.create(
 			nem.Deadline.create(),
-			1,1,[targetPublicAccount],[],nem.NetworkType.TEST_NET
+			1,1,[targetPublicAccount.address],[],nem.NetworkType.TEST_NET
 		);
 
 	}else{
@@ -607,7 +613,7 @@ function handoverHanco(targetPulicKey){
 		//再譲渡(所有移転)
 		msigTx = nem.MultisigAccountModificationTransaction.create(
 			nem.Deadline.create(),
-			0,0,[targetPublicAccount],[signerQR.account],nem.NetworkType.TEST_NET
+			0,0,[targetPublicAccount.address],[signerQR.account.address],nem.NetworkType.TEST_NET
 		);
 	}
 
@@ -656,8 +662,14 @@ function exeAggBondedTx(metaTx,targetPublicAccount,signer,callback,final){
 		aggregate: signedAggregateTx,
 		hashLock: signedLockTx,
 	};
-	console.log(NODE + "/transaction/" + signedAggregateTx.hash + "/status");
-	console.log(NODE + "/transaction/" + signedLockTx.hash + "/status");
+
+	console.log(NODE + "/transactionStatus/" + signedAggregateTx.hash);
+	console.log(NODE + "/transactions/confirmed/" + signedAggregateTx.hash);
+
+	console.log(NODE + "/transactionStatus/" + signedLockTx.hash);
+	console.log(NODE + "/transactions/confirmed/" + signedLockTx.hash);
+
+
 
 	transactionService.announceHashLockAggregateBonded(
 		signedAggregateHashLock.hashLock,
@@ -681,7 +693,7 @@ function exeAggBondedTx(metaTx,targetPublicAccount,signer,callback,final){
 			}),
 		)
 		.subscribe(tx => {
-			callback();
+			callback(tx);
 		},err =>{
 			alert(err);
 			console.error(err);
@@ -749,7 +761,7 @@ $("#modal_ok").click(function(){
 
 			$('#div_text_confirm').collapse('hide');
 
-			txHttp.getTransaction(jsonData.hash)
+			txHttp.getTransaction(jsonData.hash,nem.TransactionGroup.Confirmed)
 			.pipe(
 				op.filter(tx => tx.signer.publicKey === assetPublicAccount.publicKey)
 			)
@@ -762,10 +774,12 @@ $("#modal_ok").click(function(){
 	}else if(currentTab == "tab_verify"){
 
 		(async() => {
-			const tx = await txHttp.getTransaction(jsonData.hash).toPromise();
+			const tx = await txHttp.getTransaction(jsonData.hash,nem.TransactionGroup.Confirmed).toPromise();
+
 			const bh = await blockHttp.getBlockByHeight(tx.transactionInfo.height).toPromise();
 			const key = nem.KeyGenerator.generateUInt64Key(tx.transactionInfo.hash);
-			await metaHttp.getAccountMetadataByKeyAndSender(tx.signer.address,key.toHex(),tx.signer.publicKey)
+//			await metaHttp.getAccountMetadataByKeyAndSender(tx.signer.address,key.toHex(),tx.signer.publicKey)
+			await metaHttp.getAccountMetadataByKeyAndSender(tx.signer.address, key.toHex(), tx.signer.address)
 			.toPromise().then(mt=>{
 				console.log(mt);
 				if(mt.metadataEntry.value === "disabled"){
@@ -825,7 +839,7 @@ $("#modal_ok").click(function(){
 		multisigHttp.getMultisigAccountInfo(assetPublicAccount.address)
 		.subscribe(_=>{
 
-			if(_.multisigAccounts.length > 0){
+			if(_.multisigAddresses.length > 0){
 
 				appendList(assetPublicAccount.publicKey,"マイはんこ");
 				for (item of _.multisigAccounts) {
@@ -929,7 +943,7 @@ $('#button_confirm' ).click(function(e) {
 
 		//トランザクションに対して承認
 		//メッセージはtx hash値固定
-		txHttp.getTransaction(jsonData.hash).subscribe(x=>{
+		txHttp.getTransaction(jsonData.hash,nem.TransactionGroup.Confirmed).subscribe(x=>{
 			signByHanco(x.signer.address,"confirm",jsonData.hash)
 		});
 
