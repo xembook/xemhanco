@@ -839,12 +839,19 @@ $("#modal_ok").click(function(){
 		multisigHttp.getMultisigAccountInfo(assetPublicAccount.address)
 		.subscribe(_=>{
 
+			console.log(_);
 			if(_.multisigAddresses.length > 0){
 
 				appendList(assetPublicAccount.publicKey,"マイはんこ");
-				for (item of _.multisigAccounts) {
-					appendList(item.publicKey,item.publicKey);
-				}
+				accountHttp.getAccountsInfo(_.multisigAddresses)
+				.subscribe(items => {
+
+					for (item of items) {
+						appendList(item.publicKey,item.publicKey);
+					}
+				})
+
+				
 				$('#modal-msig').modal('show');
 			}else{
 				if(_.cosignatories.length > 0){
