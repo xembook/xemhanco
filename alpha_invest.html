@@ -417,7 +417,7 @@ function setSignerListener(cosignerAccount){
 }
 
 //はんこ情報表示
-function showAccountQR(x){
+function showAccountQR(_assetPublicAccount){
 
 	const accountSubscribe = function(observer){
 		observer.pipe(
@@ -434,11 +434,11 @@ function showAccountQR(x){
 		},err => console.log(err));
 	}
 
-	const assetHttp = accountHttp.getAccountInfo(assetPublicAccount.address)
-	const assetListener = listener.confirmed(assetPublicAccount.address)
+	const assetHttp = accountHttp.getAccountInfo(_assetPublicAccount.address)
+	const assetListener = listener.confirmed(_assetPublicAccount.address)
 	.pipe(
 		op.delay(1000),
-		op.mergeMap(x=>accountHttp.getAccountInfo(assetPublicAccount.address)),
+		op.mergeMap(x=>accountHttp.getAccountInfo(_assetPublicAccount.address)),
 	);
 
 	accountSubscribe(assetHttp);
@@ -446,36 +446,15 @@ function showAccountQR(x){
 
 	//未承認トランザクション受信（スピナー回す）
 	//TODO: アグリゲートトランザクション未対応
-	console.log("listener set:"+ assetPublicAccount.address.plain());
-	listener.unconfirmedAdded(assetPublicAccount.address)
-	.pipe(
-		op.filter((tx) => tx.mosaics !== undefined),
-		op.mergeMap(_=>{
-			console.log(_);
-			return _.mosaics;
-		}),
-		op.filter(_ => _.id.toHex() === CURRENCY)
-	)
-	.subscribe(_=> {
-		console.log("unconfirmed")
-		$('#spinner_faucet').collapse('show')
-	},err => console.error(err));
+	console.log("listener set:"+ _assetPublicAccount.address.plain());
 
-	const contactQR = new qr.ContactQR("xemhanco.contact.1",assetPublicAccount);
+	const contactQR = new qr.ContactQR("xemhanco.contact.1",_assetPublicAccount);
 	contactQR.toBase64().subscribe(x => {
 		$('#contact').attr('src',x);
-		$('#text_contact').text(assetPublicAccount.publicKey);
+		$('#text_contact').text(_assetPublicAccount.publicKey);
 	});
 
 
-	const key = nem.KeyGenerator.generateUInt64Key(assetPublicAccount.publicKey);
-	metaHttp.getAccountMetadataByKeyAndSender(assetPublicAccount.address,key.toHex(),assetPublicAccount.address)
-	.pipe(
-		op.filter(_=> _.metadataEntry.value == "disabled")
-	)
-	.subscribe(_=>{
-		$('#disabled_contact').collapse('show');
-	},err => console.log(err));
 
 
 }
@@ -812,66 +791,67 @@ $("#modal_ok").click(function(){
 	//復元
 	}else if(currentTab == "tab_"){
 
-		try{
-			const signerQR = qr.AccountQR.fromJSON(scanData.innerText,$("#pass").val());
-			assetPublicAccount = signerQR.account.publicAccount;
-			setSignerListener(assetPublicAccount);
-			signerQR.toBase64().subscribe(x => {
-				$('#div1').collapse('hide');
-				$('#div2').collapse('show');
-				$('#hanco').attr('src',x);
-			});
-			signerJSON = signerQR.toJSON();
-			delete signerQR;
-		}
-		catch (e) {
-			alert(e);
-			console.log(e);
-			return false;
-		}
+/*
+	const asset = nem.Account.generateNewAccount(nem.NetworkType.TEST_NET);
+	assetPublicAccount = asset.publicAccount;
+	setSignerListener(assetPublicAccount);
 
-		const appendList = function(publicKey,name){
-			$('#list-msig ul')
-			.append('<button type="button" publicKey="'
-			+ publicKey
-			+'" data-toggle="msig" class="button-msig list-group-item list-group-item-action">'
-			+ name
-			+ '</button>'
-			);
-		};
-		//マルチシグ保有調査
-		multisigHttp.getMultisigAccountInfo(assetPublicAccount.address)
-		.subscribe(_=>{
+	const signerQR = new qr.AccountQR(asset,$("#pass").val(),nem.NetworkType.TEST_NET);
+	signerQR.toBase64().subscribe(x =>{
+		showAccountQR(x);
+		$('#div1').collapse('hide');
+		$('#div2').collapse('show');
+		$('#hanco').attr('src',x);
+	});
+	signerJSON = signerQR.toJSON();
+	delete asset;
+	delete signerQR;
+*/
 
-			console.log(_);
-			if(_.multisigAddresses.length > 0){
 
-				appendList(assetPublicAccount.publicKey,"マイはんこ");
-				accountHttp.getAccountsInfo(_.multisigAddresses)
-				.subscribe(items => {
+//	const asset = nem.Account.generateNewAccount(nem.NetworkType.TEST_NET);
+//	const signerQR = new qr.AccountQR(asset,'test',nem.NetworkType.TEST_NET);
+	const qrData = '{"v":3,"type":2,"network_id":152,"data":{"ciphertext":"5ccadc07928489d568464b565a94fa1dFDqT1tP7/RlzsLoGCrpdugxR13X7Fbx/qF97pAXlFcMFppQfPYZ3p/WBe4PwqWcmisM9qB8tKArc2AK4s1CnOeUNDkBAkvHWKIbR0eNKl2o=","salt":"8ee57fccab84e346a62b2f81cd7044105c0408ddd0a9a7049c2c8570d1decf6c"}}';
+	const signerQR = qr.AccountQR.fromJSON(qrData,"test");
 
-					for (item of items) {
-						appendList(item.publicKey,item.publicKey);
-					}
-				})
 
-				
-				$('#modal-msig').modal('show');
-			}else{
-				if(_.cosignatories.length > 0){
-					alert("すでに譲渡されたアカウントです。");
-				}
-				showAccountQR();
-			}
-		},
-		err=>{
-			if(err.toString().indexOf("ResourceNotFound")>0){
-				showAccountQR();
-			}else{
-				alert(err);
-			}
-		},
-		()=>$('#div3').collapse('show'));
+	assetPublicAccount = signerQR.account.publicAccount;
+//	assetPublicAccount = signerQR2.account.publicAccount;
+	console.log(signerQR);
+//	console.log(signerQR2);
+
+	listener.unconfirmedAdded(signerQR.account.publicAccount.address)
+	.pipe(
+		op.filter((tx) => tx.mosaics !== undefined),
+		op.mergeMap(_=>_.mosaics),
+		op.filter(_ => _.id.toHex() === CURRENCY)
+	)
+	.subscribe(_=> {
+		console.log("unconfirmed")
+		$('#spinner_faucet').collapse('show')
+	},err => console.error(err));
+
+
+//	showAccountQR(assetPublicAccount);
+		$('#div1').collapse('hide');
+		$('#div2').collapse('show');
+	
+/*
+	signerQR.toBase64().subscribe(x => {
+		showAccountQR(x);
+		$('#div1').collapse('hide');
+		$('#div2').collapse('show');
+//		$('#hanco').attr('src',x);
+	});
+*/
+//	signerJSON = signerQR.toJSON();
+
+	delete signerQR;
+
+
+		
+
+
 	}
 });
 
@@ -889,7 +869,6 @@ $("#list-msig").on("click",".button-msig", function() {
 $("#create").click(function(){
 
 	const asset = nem.Account.generateNewAccount(nem.NetworkType.TEST_NET);
-	console.log(asset);
 	assetPublicAccount = asset.publicAccount;
 	setSignerListener(assetPublicAccount);
 
