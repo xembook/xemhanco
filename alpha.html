@@ -814,7 +814,10 @@ $("#modal_ok").click(function(){
 
 		try{
 			const signerQR = qr.AccountQR.fromJSON(scanData.innerText,$("#pass").val());
-			assetPublicAccount = signerQR.account.publicAccount;
+			//QRコードライブラリのAccountクラス使用を避けるため、Symbol-sdkのAccountクラスに置き換える
+			assetPublicAccount = nem.PublicAccount.createFromPublicKey(
+				signerQR.account.publicKey,nem.NetworkType.TEST_NET
+			);
 			setSignerListener(assetPublicAccount);
 			signerQR.toBase64().subscribe(x => {
 				$('#div1').collapse('hide');
@@ -855,7 +858,7 @@ $("#modal_ok").click(function(){
 					}
 				})
 
-				
+
 				$('#modal-msig').modal('show');
 			}else{
 				if(_.cosignatories.length > 0){
