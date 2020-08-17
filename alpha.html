@@ -189,7 +189,7 @@
 
 <script src="jsQR.js"></script>
 <script src="symbol-qr-library-0.12.0.js"></script>
-<script src="symbol-sdk-0.20.6.js"></script>
+<script src="symbol-sdk-0.20.7.js"></script>
 <script src="xembook-tools.js"></script>
 <script>$(function() {
 
@@ -469,8 +469,12 @@ function showAccountQR(x){
 
 
 	const key = nem.KeyGenerator.generateUInt64Key(assetPublicAccount.publicKey);
-	metaHttp.getAccountMetadataByKeyAndSender(assetPublicAccount.address,key.toHex(),assetPublicAccount.address)
+	metaHttp.search({sourceAddress:assetPublicAccount.address,scopedMetadataKey:key.toHex(),targetAddress:assetPublicAccount.address,metadataType:nem.MetadataType.Account})
+
+
+//	metaHttp.getAccountMetadataByKeyAndSender(assetPublicAccount.address,key.toHex(),assetPublicAccount.address)
 	.pipe(
+		op.mergeMap(page => page.data),
 		op.filter(_=> _.metadataEntry.value == "disabled")
 	)
 	.subscribe(_=>{
@@ -538,13 +542,14 @@ async function addMeta(callback){
 	const key = nem.KeyGenerator.generateUInt64Key(assetPublicAccount.publicKey);
 	const value = 'disabled';
 
-	const metaTx = await metaService.createMetadataTransaction(
+	const metaTx = await metaService.createAccountMetadataTransaction(
 		nem.Deadline.create(),
 		nem.NetworkType.TEST_NET,
-		nem.MetadataType.Account,
 		assetPublicAccount.address,//target
 		key,value,
-		assetPublicAccount.address // sender
+		assetPublicAccount.address, // sender
+		nem.UInt64.fromUint(100000)
+
 	).toPromise();
 
 	const aggregateTx = nem.AggregateTransaction.createComplete(
@@ -575,14 +580,13 @@ async function addAuth(){
 	const value = 'authenticated';
 	const signerQR = qr.AccountQR.fromJSON(signerJSON,window.prompt("パスフレーズを入力してください", ""));
 
-	metaService.createMetadataTransaction(
+	metaService.createAccountMetadataTransaction(
 		nem.Deadline.create(),
 		nem.NetworkType.TEST_NET,
-		nem.MetadataType.Account,
 		targetPublicAccount.address,//target
 		key,value,
-		assetPublicAccount.address // sender
-
+		assetPublicAccount.address, // sender
+		nem.UInt64.fromUint(100000)
 	).subscribe(metaTx=>{
 
 		$('#spinner_auth').collapse('show');
@@ -783,7 +787,13 @@ $("#modal_ok").click(function(){
 			const bh = await blockHttp.getBlockByHeight(tx.transactionInfo.height).toPromise();
 			const key = nem.KeyGenerator.generateUInt64Key(tx.transactionInfo.hash);
 //			await metaHttp.getAccountMetadataByKeyAndSender(tx.signer.address,key.toHex(),tx.signer.publicKey)
-			await metaHttp.getAccountMetadataByKeyAndSender(tx.signer.address, key.toHex(), tx.signer.address)
+			await metaHttp.search({
+				sourceAddress:tx.signer.address,
+				scopedMetadataKey:key.toHex(),
+				targetAddress:tx.signer.address,
+				metadataType:nem.MetadataType.Account
+			})
+//			await metaHttp.getAccountMetadataByKeyAndSender(tx.signer.address, key.toHex(), tx.signer.address)
 			.toPromise().then(mt=>{
 				console.log(mt);
 				if(mt.metadataEntry.value === "disabled"){
